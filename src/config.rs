@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt::Display, rc::Rc};
 
 use crate::errors;
 
@@ -38,23 +38,35 @@ pub struct Node {
     tx_messages: Vec<MessageRef>,
 
     object_entries: Vec<ObjectEntryRef>,
+    get_resp_message: MessageRef,
+    get_req_message: MessageRef,
+    set_resp_message: MessageRef,
+    set_req_message: MessageRef,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Visibility {
+    Global,
+    Static,
 }
 
 pub type TypeRef = ConfigRef<Type>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Type {
     Primitive(SignalType),
     Struct {
         name: String,
         description: Option<String>,
         attribs: Vec<(String, TypeRef)>,
+        visibility: Visibility,
     },
     Enum {
         name: String,
         description: Option<String>,
         size: u8,
         entries: Vec<(String, u64)>,
+        visibility: Visibility,
     },
     Array {
         len: usize,
@@ -70,6 +82,7 @@ pub struct Command {
     description: Option<String>,
     tx_message: MessageRef,
     rx_message: MessageRef,
+    visibility: Visibility,
 }
 
 type StreamRef = ConfigRef<Stream>;
@@ -78,16 +91,17 @@ type StreamRef = ConfigRef<Stream>;
 pub struct Stream {
     name: String,
     description: Option<String>,
-    mappings: Vec<ObjectEntryRef>,
+    mappings: Vec<Option<ObjectEntryRef>>,
     message: MessageRef,
+    visibility: Visibility,
 }
 
 pub type ObjectEntryRef = ConfigRef<ObjectEntry>;
 
 #[derive(Debug, Clone)]
 pub enum ObjectEntryAccess {
-    Const, // no write
-    Local, // local write public read
+    Const,  // no write
+    Local,  // local write public read
     Global, // public write
 }
 
@@ -97,7 +111,8 @@ pub struct ObjectEntry {
     description: Option<String>,
     id: u32,
     ty: TypeRef,
-    access : ObjectEntryAccess,
+    access: ObjectEntryAccess,
+    visibility: Visibility,
 }
 
 #[derive(Debug)]
@@ -115,6 +130,7 @@ pub struct Message {
     id: MessageId,
     encoding: Option<MessageEncoding>,
     signals: Vec<SignalRef>,
+    visbility: Visibility,
 }
 
 // describes how to map Type to signals.
@@ -134,7 +150,7 @@ pub enum SignalSign {
     Unsigned,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SignalType {
     UnsignedInt { size: u8 },
     SignedInt { size: u8 },
@@ -223,6 +239,18 @@ impl Node {
             None => None,
         }
     }
+    pub fn get_resp_message(&self) -> &Message {
+        &self.get_resp_message
+    }
+    pub fn get_req_message(&self) -> &Message {
+        &self.get_req_message
+    }
+    pub fn set_resp_message(&self) -> &Message {
+        &self.set_resp_message
+    }
+    pub fn set_req_message(&self) -> &Message {
+        &self.set_req_message
+    }
 }
 
 impl Type {
@@ -247,12 +275,14 @@ impl Type {
                 name,
                 description: _,
                 attribs: _,
+                visibility: _,
             } => name.to_owned(),
             Type::Enum {
                 name,
                 description: _,
                 size: _,
                 entries: _,
+                visibility: _,
             } => name.to_owned(),
             Type::Array { len, ty } => format!("{}[{len}]", ty.name()),
         }
@@ -269,25 +299,15 @@ impl Command {
             None => None,
         }
     }
-    pub fn message(&self) -> &MessageRef {
+    pub fn tx_message(&self) -> &Message {
         &self.tx_message
+    }
+    pub fn rx_message(&self) -> &Message {
+        &self.rx_message
     }
 }
 
 impl Stream {
-    pub fn new(
-        name: String,
-        description: Option<String>,
-        tx_mappings: Vec<ObjectEntryRef>,
-        message: MessageRef,
-    ) -> Stream {
-        Stream {
-            name,
-            description,
-            mappings: tx_mappings,
-            message,
-        }
-    }
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -297,7 +317,7 @@ impl Stream {
             None => None,
         }
     }
-    pub fn tx_mappings(&self) -> &Vec<ObjectEntryRef> {
+    pub fn mapping(&self) -> &Vec<Option<ObjectEntryRef>> {
         &self.mappings
     }
     pub fn message(&self) -> &MessageRef {
@@ -324,21 +344,6 @@ impl ObjectEntry {
 }
 
 impl Message {
-    pub fn new(
-        id: MessageId,
-        name: String,
-        description: Option<String>,
-        structure: Option<MessageEncoding>,
-        signals: Vec<SignalRef>,
-    ) -> Message {
-        Message {
-            id,
-            name,
-            description,
-            encoding: structure,
-            signals,
-        }
-    }
     pub fn id(&self) -> &MessageId {
         &self.id
     }
@@ -422,6 +427,15 @@ impl SignalType {
 }
 
 impl Signal {
+    pub fn new(name : &str, description : Option<&str>, ty : SignalType) -> Signal {
+        Signal {
+            name : name.to_owned(),
+            description : description.map(|s| s.to_owned()),
+            ty,
+            offset : 0,
+            value_table : None,
+        }
+    }
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -436,6 +450,9 @@ impl Signal {
     }
     pub fn scale(&self) -> f64 {
         self.ty.scale()
+    }
+    pub fn byte_offset(&self) -> usize {
+        self.offset
     }
     pub fn offset(&self) -> f64 {
         self.ty.offset()
@@ -478,7 +495,24 @@ impl Display for Network {
         writeln!(f, "{s1}build_time : {}", self.build_time)?;
         writeln!(f, "{s1}types:")?;
         for ty in &self.types {
-            write!(f, "{s2}{}", ty.name())?;
+            let vis = match ty as &Type {
+                Type::Primitive(_) => "Global".to_owned(),
+                Type::Struct {
+                    name: _,
+                    description: _,
+                    attribs: _,
+                    visibility,
+                } => format!("{visibility:?}"),
+                Type::Enum {
+                    name: _,
+                    description: _,
+                    size: _,
+                    entries: _,
+                    visibility,
+                } => format!("{visibility:?}"),
+                Type::Array { len: _, ty: _ } => "Static".to_owned(),
+            };
+            write!(f, "{s2}{} ({})", ty.name(), vis)?;
             match ty as &Type {
                 Type::Primitive(_) => {
                     write!(f, "\n")?;
@@ -487,6 +521,7 @@ impl Display for Network {
                     name: _,
                     description: _,
                     attribs,
+                    visibility: _,
                 } => {
                     writeln!(f, ": (struct)")?;
                     for (attrib_name, attrib_type) in attribs {
@@ -498,6 +533,7 @@ impl Display for Network {
                     description: _,
                     size: _,
                     entries,
+                    visibility: _,
                 } => {
                     writeln!(f, ": (enum)")?;
                     for (entry_name, entry_value) in entries {
@@ -539,6 +575,7 @@ impl Display for Network {
                             name,
                             description: _,
                             attribs: _,
+                            visibility: _,
                         } => {
                             write!(f, "{name} (struct)")?;
                         }
@@ -547,6 +584,7 @@ impl Display for Network {
                             description: _,
                             size: _,
                             entries: _,
+                            visibility: _,
                         } => {
                             write!(f, "{name} (enum)")?;
                         }
@@ -593,6 +631,40 @@ impl Display for Network {
             writeln!(f, "{s3}object_entries:")?;
             for entry in node.object_entries() {
                 writeln!(f, "{s4}{} : {}", entry.name(), entry.ty().name())?;
+            }
+            writeln!(f, "{s3}tx_streams:")?;
+            for stream in node.tx_streams() {
+                writeln!(f, "{s4}{} [{}]", stream.name(), stream.message().name())?;
+                for oe in stream.mapping() {
+                    let oe_name = match oe {
+                        Some(oe) => oe.name(),
+                        None => "None",
+                    };
+                    let oe_ty = match oe {
+                        Some(oe) => oe.ty().name(),
+                        None => "?".to_owned(),
+                    };
+                    writeln!(f, "{s5}<-{} : {}", oe_name, oe_ty)?;
+                }
+            }
+            writeln!(f, "{s3}rx_streams:")?;
+            for stream in node.rx_streams() {
+                writeln!(f, "{s4}{} [{}]", stream.name(), stream.message().name())?;
+                for oe in stream.mapping() {
+                    let oe_name = match oe {
+                        Some(oe) => oe.name(),
+                        None => "None",
+                    };
+                    let oe_ty = match oe {
+                        Some(oe) => oe.ty().name(),
+                        None => "?".to_owned(),
+                    };
+                    writeln!(f, "{s5}->{} : {}", oe_name, oe_ty)?;
+                }
+            }
+            writeln!(f, "{s3}types:")?;
+            for ty in node.types() {
+                writeln!(f, "{s4}{}", ty.name())?;
             }
         }
         Ok(())
@@ -653,6 +725,7 @@ pub struct MessageData {
     id: MessageIdTemplate,
     format: MessageFormat,
     network_builder: NetworkBuilder,
+    visibility: Visibility,
 }
 
 #[derive(Debug)]
@@ -678,6 +751,7 @@ pub struct EnumData {
     name: String,
     description: Option<String>,
     entries: Vec<(String, Option<u64>)>,
+    visibility: Visibility,
 }
 
 #[derive(Debug, Clone)]
@@ -687,6 +761,7 @@ pub struct StructData {
     name: String,
     description: Option<String>,
     attributes: Vec<(String, String)>,
+    visibility: Visibility,
 }
 
 #[derive(Debug, Clone)]
@@ -710,18 +785,21 @@ pub struct NodeData {
     network_builder: NetworkBuilder,
     rx_messages: Vec<MessageBuilder>,
     tx_messages: Vec<MessageBuilder>,
-    object_entries : Vec<ObjectEntryBuilder>,
+    object_entries: Vec<ObjectEntryBuilder>,
+    tx_streams: Vec<StreamBuilder>,
+    rx_streams: Vec<ReceiveStreamBuilder>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ObjectEntryBuilder(BuilderRef<ObjectEntryData>);
 #[derive(Debug)]
 pub struct ObjectEntryData {
-    name : String,
-    description : Option<String>,
-    unit : Option<String>,
-    ty : String,
-    access : ObjectEntryAccess,
+    name: String,
+    description: Option<String>,
+    unit: Option<String>,
+    ty: String,
+    access: ObjectEntryAccess,
+    visibility: Visibility,
 }
 
 #[derive(Debug, Clone)]
@@ -734,6 +812,30 @@ pub struct CommandData {
     call_message: MessageBuilder,
     call_message_format: MessageTypeFormatBuilder,
     resp_message: MessageBuilder,
+    visibility: Visibility,
+}
+
+#[derive(Debug, Clone)]
+pub struct StreamBuilder(BuilderRef<StreamData>);
+#[derive(Debug)]
+pub struct StreamData {
+    name: String,
+    description: Option<String>,
+    message: MessageBuilder,
+    format: MessageTypeFormatBuilder,
+    tx_node: NodeBuilder,
+    object_entries: Vec<ObjectEntryBuilder>,
+    visbility: Visibility,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReceiveStreamBuilder(BuilderRef<ReceiveStreamData>);
+#[derive(Debug)]
+pub struct ReceiveStreamData {
+    stream_builder: StreamBuilder,
+    rx_node: NodeBuilder,
+    object_entries: Vec<(usize, ObjectEntryBuilder)>,
+    visibility: Visibility,
 }
 
 impl NetworkBuilder {
@@ -746,40 +848,51 @@ impl NetworkBuilder {
         }));
 
         // Setup header types.
-        let command_resp_header_builder = network_builder.define_struct("command_resp_header");
         let command_resp_type = network_builder.define_enum("command_resp_erno");
+        command_resp_type.hide();
         command_resp_type.add_entry("Ok", Some(0)).unwrap();
         command_resp_type.add_entry("Error", Some(1)).unwrap();
+
+        let command_resp_header_builder = network_builder.define_struct("command_resp_header");
+        command_resp_header_builder.hide();
         command_resp_header_builder
             .add_attribute("erno", "command_resp_erno")
             .unwrap();
 
         let command_req_header_builder = network_builder.define_struct("command_req_header");
+        command_req_header_builder.hide();
 
         let set_resp_erno = network_builder.define_enum("set_resp_erno");
-        set_resp_erno.add_entry("Ok", Some(0));
-        set_resp_erno.add_entry("Error", Some(1));
+        set_resp_erno.hide();
+        set_resp_erno.add_entry("Ok", Some(0)).unwrap();
+        set_resp_erno.add_entry("Error", Some(1)).unwrap();
 
         let get_req_header = network_builder.define_struct("get_req_header");
+        get_req_header.hide();
         get_req_header
             .add_attribute("object_entry_index", "u16")
             .unwrap();
 
         let get_resp_header = network_builder.define_struct("get_resp_header");
+        get_resp_header.hide();
         get_resp_header
             .add_attribute("object_entry_index", "u16")
             .unwrap();
 
         let set_req_header = network_builder.define_struct("set_req_header");
+        set_req_header.hide();
         set_req_header
             .add_attribute("object_entry_index", "u16")
             .unwrap();
 
         let set_resp_header = network_builder.define_struct("set_resp_header");
+        set_resp_header.hide();
         set_resp_header
             .add_attribute("object_entry_index", "u16")
             .unwrap();
-        set_resp_header.add_attribute("erno", "command_resp_erno").unwrap();
+        set_resp_header
+            .add_attribute("erno", "command_resp_erno")
+            .unwrap();
 
         network_builder
     }
@@ -846,21 +959,71 @@ impl MessagePriority {
     }
 }
 
+impl StreamBuilder {
+    pub fn new(name: &str, node_builder: NodeBuilder) -> StreamBuilder {
+        let node_data = node_builder.0.borrow();
+        let message = node_data
+            .network_builder
+            .create_message(&format!("{}_stream_{name}", node_builder.0.borrow().name));
+        drop(node_data);
+        node_builder.add_tx_message(&message);
+        message.hide();
+        message.set_any_std_id(MessagePriority::Normal);
+        let format = message.make_type_format();
+
+        StreamBuilder(make_builder_ref(StreamData {
+            name: name.to_owned(),
+            description: None,
+            message,
+            format,
+            tx_node: node_builder,
+            object_entries: vec![],
+            visbility: Visibility::Global,
+        }))
+    }
+    pub fn hide(&self) {
+        let mut stream_data = self.0.borrow_mut();
+        stream_data.visbility = Visibility::Static;
+    }
+    pub fn add_description(&self, description: &str) {
+        let mut stream_data = self.0.borrow_mut();
+        stream_data.description = Some(description.to_owned());
+    }
+    pub fn add_entry(&self, name: &str) {
+        let mut stream_data = self.0.borrow_mut();
+        let node = stream_data.tx_node.clone();
+        let node_data = node.0.borrow();
+        let oe = node_data
+            .object_entries
+            .iter()
+            .find(|oe| oe.0.borrow().name == name)
+            .cloned()
+            .unwrap_or_else(|| node.create_object_entry(name, "u1"));
+        stream_data.object_entries.push(oe.clone());
+        let oe_data = oe.0.borrow();
+        stream_data.format.add_type(&oe_data.ty, &oe_data.name);
+    }
+}
+
 impl NodeBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder) -> NodeBuilder {
         let get_req_message = network_builder.create_message(&format!("{name}_get_req"));
+        get_req_message.hide();
         get_req_message.set_any_std_id(MessagePriority::Low);
         get_req_message.add_description(&format!("get request message for node : {name}"));
 
         let get_resp_message = network_builder.create_message(&format!("{name}_get_resp"));
+        get_resp_message.hide();
         get_resp_message.set_any_std_id(MessagePriority::Low);
         get_resp_message.add_description(&format!("get response message for node : {name}"));
 
         let set_req_message = network_builder.create_message(&format!("{name}_set_req"));
+        set_req_message.hide();
         set_req_message.set_any_std_id(MessagePriority::Low);
         set_req_message.add_description(&format!("set request message for node : {name}"));
 
         let set_resp_message = network_builder.create_message(&format!("{name}_set_resp"));
+        set_resp_message.hide();
         set_resp_message.add_description(&format!("set response message for node : {name}"));
         set_resp_message.set_any_std_id(MessagePriority::Low);
 
@@ -868,15 +1031,17 @@ impl NodeBuilder {
             name: name.to_owned(),
             description: None,
             network_builder: network_builder.clone(),
-            get_req_message : get_req_message.clone(),
-            get_resp_message : get_resp_message.clone(),
-            set_req_message : set_req_message.clone(),
-            set_resp_message : set_resp_message.clone(),
+            get_req_message: get_req_message.clone(),
+            get_resp_message: get_resp_message.clone(),
+            set_req_message: set_req_message.clone(),
+            set_resp_message: set_resp_message.clone(),
             commands: vec![],
             extern_commands: vec![],
             tx_messages: vec![],
             rx_messages: vec![],
-            object_entries : vec![],
+            object_entries: vec![],
+            tx_streams: vec![],
+            rx_streams: vec![],
         }));
         node_builder.add_rx_message(&get_req_message);
         node_builder.add_tx_message(&get_resp_message);
@@ -884,6 +1049,10 @@ impl NodeBuilder {
         node_builder.add_tx_message(&set_resp_message);
 
         node_builder
+    }
+    pub fn add_description(&self, description: &str) {
+        let mut node_data = self.0.borrow_mut();
+        node_data.description = Some(description.to_owned());
     }
     pub fn add_tx_message(&self, message_builder: &MessageBuilder) {
         let mut node_data = self.0.borrow_mut();
@@ -897,43 +1066,156 @@ impl NodeBuilder {
         let command_builder = CommandBuilder::new(name, &self);
         let mut node_data = self.0.borrow_mut();
         node_data.commands.push(command_builder.clone());
-        node_data.rx_messages.push(command_builder.0.borrow().call_message.clone());
-        node_data.tx_messages.push(command_builder.0.borrow().resp_message.clone());
+        node_data
+            .rx_messages
+            .push(command_builder.0.borrow().call_message.clone());
+        node_data
+            .tx_messages
+            .push(command_builder.0.borrow().resp_message.clone());
         command_builder
     }
-    pub fn add_extern_command(&self, message_builder : &CommandBuilder) {
+    pub fn add_extern_command(&self, message_builder: &CommandBuilder) {
         let mut node_data = self.0.borrow_mut();
         node_data.extern_commands.push(message_builder.clone());
-        node_data.rx_messages.push(message_builder.0.borrow().resp_message.clone());
-        node_data.tx_messages.push(message_builder.0.borrow().call_message.clone());
+        node_data
+            .rx_messages
+            .push(message_builder.0.borrow().resp_message.clone());
+        node_data
+            .tx_messages
+            .push(message_builder.0.borrow().call_message.clone());
     }
-    pub fn create_object_entry(&self, name : &str, ty : &str) -> ObjectEntryBuilder{
+    pub fn create_object_entry(&self, name: &str, ty: &str) -> ObjectEntryBuilder {
         let object_entry_builder = ObjectEntryBuilder::new(name, ty);
         let mut node_data = self.0.borrow_mut();
         node_data.object_entries.push(object_entry_builder.clone());
         object_entry_builder
     }
+    pub fn create_stream(&self, name: &str) -> StreamBuilder {
+        let stream_builder = StreamBuilder::new(name, self.clone());
+        let mut node_data = self.0.borrow_mut();
+        node_data.tx_streams.push(stream_builder.clone());
+        stream_builder
+    }
+
+    pub fn receive_stream(&self, tx_node_name: &str, name: &str) -> ReceiveStreamBuilder {
+        let node_data = self.0.borrow();
+        if tx_node_name == node_data.name {
+            panic!("can't receive local stream");
+        }
+        let network_builder = &node_data.network_builder;
+        let tx_node_opt = network_builder
+            .0
+            .borrow()
+            .nodes
+            .borrow()
+            .iter()
+            .find(|n| n.0.borrow().name == tx_node_name)
+            .cloned();
+        let tx_node = match tx_node_opt {
+            Some(tx_node) => tx_node,
+            None => network_builder.create_node(tx_node_name),
+        };
+        let tx_node_data = tx_node.0.borrow();
+        let tx_stream_opt = tx_node_data
+            .tx_streams
+            .iter()
+            .find(|s| s.0.borrow().name == name)
+            .cloned();
+        let tx_stream = match tx_stream_opt {
+            Some(tx_stream) => tx_stream,
+            None => tx_node.create_stream(name),
+        };
+        drop(node_data);
+
+        let tx_stream_data = tx_stream.0.borrow();
+        self.add_rx_message(&tx_stream_data.message);
+        drop(tx_stream_data);
+
+
+        let mut node_data = self.0.borrow_mut();
+        let rx_stream_builder = ReceiveStreamBuilder::new(tx_stream, self.clone());
+        node_data.rx_streams.push(rx_stream_builder.clone());
+
+
+        rx_stream_builder
+    }
+}
+
+impl ReceiveStreamBuilder {
+    pub fn new(stream_builder: StreamBuilder, rx_node: NodeBuilder) -> ReceiveStreamBuilder {
+        ReceiveStreamBuilder(make_builder_ref(ReceiveStreamData {
+            stream_builder,
+            rx_node,
+            object_entries: vec![],
+            visibility: Visibility::Global,
+        }))
+    }
+    pub fn hide(&self) {
+        let mut rx_stream_data = self.0.borrow_mut();
+        rx_stream_data.visibility = Visibility::Static;
+    }
+    pub fn map(&self, from: &str, to: &str) {
+        // resolve from
+        let mut rx_stream_data = self.0.borrow_mut();
+        let tx_stream_builder = rx_stream_data.stream_builder.clone();
+        let tx_stream_data = tx_stream_builder.0.borrow();
+        let opt_pos = tx_stream_data
+            .object_entries
+            .iter()
+            .position(|oe| oe.0.borrow().name == from);
+        let Some(pos) = opt_pos else {
+            panic!("invalid rx stream mapping");
+        };
+        // resolve to
+        let oe_opt = rx_stream_data
+            .rx_node
+            .0
+            .borrow()
+            .object_entries
+            .iter()
+            .find(|oe| oe.0.borrow().name == to)
+            .cloned();
+        let oe = match oe_opt {
+            Some(oe) => {
+                assert_eq!(
+                    oe.0.borrow().ty,
+                    tx_stream_data.object_entries[pos].0.borrow().ty
+                );
+                oe
+            }
+            None => {
+                let tx_oe = tx_stream_data.object_entries[pos].0.borrow();
+                rx_stream_data.rx_node.create_object_entry(to, &tx_oe.ty)
+            }
+        };
+        rx_stream_data.object_entries.push((pos, oe));
+    }
 }
 
 impl ObjectEntryBuilder {
-    pub fn new(name : &str, ty : &str) -> ObjectEntryBuilder {
-        ObjectEntryBuilder(make_builder_ref(ObjectEntryData{
-            name : name.to_owned(),
-            ty : ty.to_owned(),
-            description : None,
-            unit : None,
-            access : ObjectEntryAccess::Global,
+    pub fn new(name: &str, ty: &str) -> ObjectEntryBuilder {
+        ObjectEntryBuilder(make_builder_ref(ObjectEntryData {
+            name: name.to_owned(),
+            ty: ty.to_owned(),
+            description: None,
+            unit: None,
+            access: ObjectEntryAccess::Global,
+            visibility: Visibility::Global,
         }))
     }
-    pub fn add_description(&self, description : &str) {
+    pub fn hide(&self) {
+        let mut data = self.0.borrow_mut();
+        data.visibility = Visibility::Static;
+    }
+    pub fn add_description(&self, description: &str) {
         let mut data = self.0.borrow_mut();
         data.description = Some(description.to_owned());
     }
-    pub fn set_access(&self, access : ObjectEntryAccess) {
+    pub fn set_access(&self, access: ObjectEntryAccess) {
         let mut data = self.0.borrow_mut();
         data.access = access;
     }
-    pub fn add_unit(&self, unit : &str) {
+    pub fn add_unit(&self, unit: &str) {
         let mut data = self.0.borrow_mut();
         data.unit = Some(unit.to_owned());
     }
@@ -945,15 +1227,17 @@ impl CommandBuilder {
         let network_builder = &node_data.network_builder;
         let tx_message =
             network_builder.create_message(&format!("{}_{}_command_req", node_data.name, name));
+        tx_message.hide();
         tx_message.set_any_std_id(MessagePriority::High);
         let tx_message_format = tx_message.make_type_format();
         tx_message_format.add_type("command_req_header", "header");
 
         let rx_message =
             network_builder.create_message(&format!("{}_{}_command_resp", node_data.name, name));
+        rx_message.hide();
+        rx_message.set_any_std_id(MessagePriority::Low);
         let rx_message_format = rx_message.make_type_format();
         rx_message_format.add_type("command_resp_header", "header");
-        rx_message.set_any_std_id(MessagePriority::Low);
 
         CommandBuilder(make_builder_ref(CommandData {
             name: name.to_owned(),
@@ -962,19 +1246,29 @@ impl CommandBuilder {
             call_message_format: tx_message_format,
             resp_message: rx_message,
             tx_node: tx_node_builder.clone(),
+            visibility: Visibility::Global,
         }))
     }
+    pub fn hide(&self) {
+        let mut command_data = self.0.borrow_mut();
+        command_data.visibility = Visibility::Static;
+    }
     pub fn set_priority(&self, priority: MessagePriority) {
-        let node_data = self.0.borrow();
-        node_data.call_message.set_any_std_id(priority);
+        let command_data = self.0.borrow();
+        command_data.call_message.set_any_std_id(priority);
     }
     pub fn add_description(&self, name: &str) {
-        let mut node_data = self.0.borrow_mut();
-        node_data.description = Some(name.to_owned());
+        let mut command_data = self.0.borrow_mut();
+        command_data.description = Some(name.to_owned());
     }
     pub fn add_argument(&self, name: &str, ty: &str) {
-        let node_data = self.0.borrow();
-        node_data.call_message_format.add_type(ty, name);
+        let command_data = self.0.borrow();
+        command_data.call_message_format.add_type(ty, name);
+    }
+    pub fn add_callee(&self, name: &str) {
+        let network_builder = self.0.borrow().tx_node.0.borrow().network_builder.clone();
+        let callee = network_builder.create_node(name);
+        callee.add_extern_command(&self);
     }
 }
 
@@ -986,7 +1280,12 @@ impl MessageBuilder {
             id: MessageIdTemplate::AnyAny(MessagePriority::Default),
             format: MessageFormat::Empty,
             network_builder: network_builder.clone(),
+            visibility: Visibility::Global,
         }))
+    }
+    pub fn hide(&self) {
+        let mut message_data = self.0.borrow_mut();
+        message_data.visibility = Visibility::Static;
     }
     pub fn set_std_id(&self, id: u32) {
         let mut message_data = self.0.borrow_mut();
@@ -1100,6 +1399,7 @@ impl EnumBuilder {
             name: name.to_owned(),
             description: None,
             entries: vec![],
+            visibility: Visibility::Global,
         }))
     }
     pub fn add_description(&self, description: &str) {
@@ -1114,6 +1414,10 @@ impl EnumBuilder {
         enum_data.entries.push((name.to_owned(), value));
         Ok(())
     }
+    pub fn hide(&self) {
+        let mut enum_data = self.0.borrow_mut();
+        enum_data.visibility = Visibility::Static;
+    }
 }
 
 impl StructBuilder {
@@ -1122,6 +1426,7 @@ impl StructBuilder {
             name: name.to_owned(),
             description: None,
             attributes: vec![],
+            visibility: Visibility::Global,
         }))
     }
     pub fn add_description(&self, description: &str) {
@@ -1139,6 +1444,10 @@ impl StructBuilder {
             .attributes
             .push((name.to_owned(), ty.to_owned()));
         Ok(())
+    }
+    pub fn hide(&self) {
+        let mut struct_data = self.0.borrow_mut();
+        struct_data.visibility = Visibility::Static;
     }
 }
 
@@ -1210,7 +1519,7 @@ impl NetworkBuilder {
             None => (),
         }
         let array_regex =
-            regex::Regex::new(r#"^(?<type>[a-zA-Z][a-zA-Z0-9]*(<[+-]?([0-9]*[.])?[0-9]+\.\.[+-]?([0-9]*[.])?[0-9]+>)?)\[(?<len>[0-9]+)\]$"#).unwrap();
+                regex::Regex::new(r#"^(?<type>[a-zA-Z][a-zA-Z0-9]*(<[+-]?([0-9]*[.])?[0-9]+\.\.[+-]?([0-9]*[.])?[0-9]+>)?)\[(?<len>[0-9]+)\]$"#).unwrap();
         match array_regex.captures(type_name) {
             Some(cap) => {
                 let len = &cap["len"];
@@ -1230,12 +1539,14 @@ impl NetworkBuilder {
                     name,
                     description: _,
                     attribs: _,
+                    visibility: _,
                 } if name == type_name => return Ok(ty.clone()),
                 Type::Enum {
                     name,
                     description: _,
                     size: _,
                     entries: _,
+                    visibility: _,
                 } if name == type_name => return Ok(ty.clone()),
                 _ => (),
             }
@@ -1271,6 +1582,7 @@ impl NetworkBuilder {
                 name,
                 description: _,
                 attribs,
+                visibility: _,
             } => {
                 for (attrib_name, attrib_type) in attribs {
                     let attrib_signals = Self::type_to_signals(
@@ -1303,6 +1615,7 @@ impl NetworkBuilder {
                 size,
                 description: _,
                 entries,
+                visibility: _,
             } => {
                 let value_table = make_config_ref(ValueTable(entries.clone()));
                 type_signals.push(make_config_ref(Signal {
@@ -1340,6 +1653,63 @@ impl NetworkBuilder {
         type_signals
     }
 
+    fn topo_sort_types(types: &Vec<TypeRef>) -> Vec<TypeRef> {
+        let n = types.len();
+        struct Node {
+            index: usize,
+            adj_list: Vec<usize>,
+        }
+        let mut nodes: Vec<Node> = vec![];
+        for i in 0..n {
+            let ty = &types[i];
+            let mut adj_list = vec![];
+            match ty as &Type {
+                Type::Struct {
+                    name: _,
+                    description: _,
+                    attribs,
+                    visibility: _,
+                } => {
+                    for (_, attrib_type) in attribs {
+                        match types.iter().position(|t| t == attrib_type) {
+                            Some(adj) => adj_list.push(adj),
+                            None => (),
+                        }
+                    }
+                }
+                Type::Array { len: _, ty } => match types.iter().position(|t| t == ty) {
+                    Some(adj) => adj_list.push(adj),
+                    None => (),
+                },
+                _ => (),
+            }
+            nodes.push(Node { index: i, adj_list })
+        }
+        let mut stack: Vec<usize> = vec![];
+        let mut visited = vec![false; nodes.len()];
+        fn topo_sort_rec(
+            nodes: &Vec<Node>,
+            visited: &mut Vec<bool>,
+            current: usize,
+            stack: &mut Vec<usize>,
+        ) {
+            visited[current] = true;
+            for adj_index in &nodes[current].adj_list {
+                if !visited[*adj_index] {
+                    topo_sort_rec(nodes, visited, *adj_index, stack);
+                }
+            }
+            stack.push(current);
+        }
+        for i in 0..n {
+            if !visited[i] {
+                topo_sort_rec(&nodes, &mut visited, i, &mut stack);
+            }
+        }
+
+        stack.iter().map(|index| types[*index].clone()).collect()
+    }
+
     fn topo_sort_type_builders(
         type_builders: &Vec<TypeBuilder>,
     ) -> errors::Result<Vec<TypeBuilder>> {
@@ -1361,7 +1731,7 @@ impl NetworkBuilder {
                     let struct_data = struct_builder.0.borrow();
                     let mut dependencies = vec![];
                     for (_, attrib_type_name) in &struct_data.attributes {
-                        //check if type is a inplace definition
+                        //check if type is a inplace definition (u?, i?, d?)
                         let is_inplace = Self::resolve_type(&vec![], attrib_type_name).is_ok();
                         if is_inplace {
                             continue;
@@ -1470,7 +1840,7 @@ impl NetworkBuilder {
                 }
                 MessageIdTemplate::AnyAny(priority) => {
                     let mut id = priority.min_id();
-                    let mut m_id: MessageIdTemplate;
+                    let m_id: MessageIdTemplate;
                     loop {
                         for j in 0..messages.len() {
                             if i == j {
@@ -1521,7 +1891,7 @@ impl NetworkBuilder {
 
     pub fn build(self) -> errors::Result<NetworkRef> {
         let builder = self.0.borrow();
-        let baudrate = builder.baudrate.expect("Missing baudrate definition");
+        let baudrate = builder.baudrate.unwrap_or(1000000);
 
         // sort types in topological order!
         let type_builders = Self::topo_sort_type_builders(&builder.types.borrow())?;
@@ -1556,6 +1926,7 @@ impl NetworkBuilder {
                         size,
                         description: enum_data.description.clone(),
                         entries,
+                        visibility: enum_data.visibility.clone(),
                     })
                 }
                 TypeBuilder::Struct(struct_builder) => {
@@ -1574,6 +1945,7 @@ impl NetworkBuilder {
                         name: struct_data.name.clone(),
                         description: struct_data.description.clone(),
                         attribs,
+                        visibility: struct_data.visibility.clone(),
                     })
                 }
             };
@@ -1595,20 +1967,18 @@ impl NetworkBuilder {
             };
             let (signals, encoding) = match &message_data.format {
                 MessageFormat::Signals(signal_format_builder) => {
+                    let mut offset : usize = 0;
                     let signal_format_data = signal_format_builder.0.borrow();
-                    (
-                        signal_format_data
-                            .0
-                            .iter()
-                            .map(|s| {
-                                make_config_ref(Signal {
-                                    name: format!("{}_{}", message_data.name, s.name),
-                                    ..s.clone()
-                                })
-                            })
-                            .collect(),
-                        None,
-                    )
+                    let mut signals = vec![];
+                    for signal_data in signal_format_data.0.iter() {
+                        signals.push(make_config_ref(Signal{
+                                name : format!("{}_{}", message_data.name, signal_data.name),
+                                offset,
+                                ..signal_data.clone()
+                        }));
+                        offset += signal_data.size() as usize;
+                    }
+                    ( signals, None)
                 }
                 MessageFormat::Types(type_format_builder) => {
                     let type_format_data = type_format_builder.0.borrow();
@@ -1645,10 +2015,11 @@ impl NetworkBuilder {
                 id,
                 encoding,
                 signals,
+                visbility: message_data.visibility.clone(),
             }));
         }
 
-        // add get and set req,resp to all nodes 
+        // add get and set req,resp to all nodes
         let n_nodes = builder.nodes.borrow().len();
         for i in 0..n_nodes {
             for j in 0..n_nodes {
@@ -1670,12 +2041,25 @@ impl NetworkBuilder {
         for node_builder in builder.nodes.borrow().iter() {
             let node_data = node_builder.0.borrow();
 
+            let mut node_types = vec![];
+
             let mut rx_messages = vec![];
             for rx_message_builder in &node_data.rx_messages {
                 let message_ref = messages
                     .iter()
                     .find(|m| m.name == rx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
+                match &message_ref.encoding {
+                    Some(encoding) => {
+                        for enc in encoding {
+                            let ty: &TypeRef = &enc.ty;
+                            if !node_types.contains(ty) {
+                                node_types.push(ty.clone());
+                            }
+                        }
+                    }
+                    None => (),
+                }
                 rx_messages.push(message_ref.clone());
             }
             let mut tx_messages = vec![];
@@ -1684,6 +2068,17 @@ impl NetworkBuilder {
                     .iter()
                     .find(|m| m.name == tx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
+                match &message_ref.encoding {
+                    Some(encoding) => {
+                        for enc in encoding {
+                            let ty: &TypeRef = &enc.ty;
+                            if !node_types.contains(ty) {
+                                node_types.push(ty.clone());
+                            }
+                        }
+                    }
+                    None => (),
+                }
                 tx_messages.push(message_ref.clone());
             }
 
@@ -1705,6 +2100,7 @@ impl NetworkBuilder {
                     description: command_data.description.clone(),
                     tx_message,
                     rx_message,
+                    visibility: command_data.visibility.clone(),
                 }));
             }
 
@@ -1713,16 +2109,68 @@ impl NetworkBuilder {
             for object_entry_builder in &node_builder.0.borrow().object_entries {
                 let object_entry_data = object_entry_builder.0.borrow();
                 let ty = Self::resolve_type(&mut types, &object_entry_data.ty)?;
+                if !node_types.contains(&ty) {
+                    node_types.push(ty.clone());
+                }
                 let id = id_acc;
                 id_acc += 1;
                 object_entries.push(make_config_ref(ObjectEntry {
-                    name : object_entry_data.name.clone(),
-                    description : object_entry_data.description.clone(),
-                    access : object_entry_data.access.clone(),
-                    id, //TODO
+                    name: object_entry_data.name.clone(),
+                    description: object_entry_data.description.clone(),
+                    access: object_entry_data.access.clone(),
+                    id,
                     ty,
+                    visibility: object_entry_data.visibility.clone(),
                 }));
             }
+
+            let mut tx_streams = vec![];
+            for tx_stream in &node_builder.0.borrow().tx_streams {
+                let stream_data = tx_stream.0.borrow();
+
+                //resolve message
+                let message = messages
+                    .iter()
+                    .find(|m| m.name == stream_data.message.0.borrow().name)
+                    .expect("stream message was not added to the network")
+                    .clone();
+                let mut mappings = vec![];
+                for oe_builder in &stream_data.object_entries {
+                    let oe_data = oe_builder.0.borrow();
+                    let oe = object_entries
+                        .iter()
+                        .find(|oe| oe.name == oe_data.name)
+                        .expect("stream object entry wasn't added to the node")
+                        .clone();
+                    mappings.push(Some(oe));
+                }
+
+                tx_streams.push(make_config_ref(Stream {
+                    name: stream_data.name.clone(),
+                    description: stream_data.description.clone(),
+                    mappings,
+                    message,
+                    visibility: stream_data.visbility.clone(),
+                }));
+            }
+            let node_types = Self::topo_sort_types(&node_types);
+
+            let get_resp_message = tx_messages
+                .iter()
+                .find(|m| m.name == node_data.get_resp_message.0.borrow().name)
+                .unwrap().clone();
+            let get_req_message = rx_messages
+                .iter()
+                .find(|m| m.name == node_data.get_req_message.0.borrow().name)
+                .unwrap().clone();
+            let set_resp_message = tx_messages
+                .iter()
+                .find(|m| m.name == node_data.set_resp_message.0.borrow().name)
+                .unwrap().clone();
+            let set_req_message = rx_messages
+                .iter()
+                .find(|m| m.name == node_data.set_req_message.0.borrow().name)
+                .unwrap().clone();
 
             nodes.push(RefCell::new(Node {
                 name: node_data.name.clone(),
@@ -1733,14 +2181,16 @@ impl NetworkBuilder {
                 rx_messages,
                 tx_messages,
                 rx_streams: vec![],
-                tx_streams: vec![],
-                types: vec![],
+                tx_streams,
+                types: node_types,
+                set_resp_message,
+                set_req_message,
+                get_resp_message,
+                get_req_message
             }));
         }
 
-
-        
-        // add commands to nodes
+        // add extern commands to nodes
         // requires all nodes to be constructed beforehand.
         for i in 0..n_nodes {
             let node_builder = &builder.nodes.borrow()[i];
@@ -1753,13 +2203,84 @@ impl NetworkBuilder {
                     }
                     let other_node = nodes[j].borrow();
                     for tx_command in &other_node.commands {
-                        if tx_command.tx_message.name == rx_command_data.call_message.0.borrow().name {
-                            nodes[i].borrow_mut().extern_commands.push((other_node.name.clone(), tx_command.clone()));
+                        if tx_command.tx_message.name
+                            == rx_command_data.call_message.0.borrow().name
+                        {
+                            nodes[i]
+                                .borrow_mut()
+                                .extern_commands
+                                .push((other_node.name.clone(), tx_command.clone()));
                             break 'outer;
                         }
                     }
                 }
-        
+            }
+            for rx_stream in &node_data.rx_streams {
+                let rx_stream_data = rx_stream.0.borrow();
+                let tx_stream_builder = rx_stream_data.stream_builder.clone();
+                let tx_stream_data = tx_stream_builder.0.borrow();
+                let tx_node_builder = tx_stream_data.tx_node.clone();
+                let tx_node_data = tx_node_builder.0.borrow();
+                // resolve node.
+                let tx_node = nodes
+                    .iter()
+                    .find(|n| n.borrow().name == tx_node_data.name)
+                    .unwrap()
+                    .borrow();
+                let tx_stream = tx_node
+                    .tx_streams
+                    .iter()
+                    .find(|s| s.name == tx_stream_data.name)
+                    .unwrap()
+                    .clone();
+
+                let mut builder_mapping = rx_stream_data.object_entries.clone();
+                builder_mapping.sort_by(|(i1, _), (i2, _)| {
+                    if i1 < i2 {
+                        Ordering::Less
+                    } else if i1 == i2 {
+                        Ordering::Equal
+                    } else {
+                        Ordering::Greater
+                    }
+                });
+                let oe_count = tx_stream.mappings.len();
+                let mut mappings = vec![];
+                let mut j = 0;
+                let rx_node_data = rx_stream_data.rx_node.0.borrow();
+                let rx_node = nodes
+                    .iter()
+                    .find(|n| n.borrow().name == rx_node_data.name)
+                    .unwrap()
+                    .borrow();
+                for i in 0..oe_count {
+                    if builder_mapping[j].0 == i {
+                        // search for object entry in rx_node
+                        let oe = rx_node
+                            .object_entries
+                            .iter()
+                            .find(|oe| oe.name == builder_mapping[j].1 .0.borrow().name)
+                            .unwrap();
+                        mappings.push(Some(oe.clone()));
+                        j += 1;
+                    } else {
+                        // insert null mapping
+                        mappings.push(None);
+                    }
+                }
+
+                drop(tx_node);
+                drop(rx_node);
+                nodes[i]
+                    .borrow_mut()
+                    .rx_streams
+                    .push(make_config_ref(Stream {
+                        name: tx_stream.name.clone(),
+                        description: tx_stream.description.clone(),
+                        message: tx_stream.message.clone(),
+                        mappings,
+                        visibility: rx_stream_data.visibility.clone(),
+                    }));
             }
         }
 
@@ -1776,27 +2297,4 @@ impl NetworkBuilder {
             nodes,
         }))
     }
-}
-
-pub fn example() {
-    let builder = NetworkBuilder::new();
-    builder.set_baudrate(10000000);
-
-    let message: MessageBuilder = builder.create_message("OpticalSpeed_Data");
-    message.set_std_id(100);
-    message.add_receiver("secu");
-   
-    let secu = builder.create_node("secu");
-    secu.create_object_entry("cpu_temperature", "d8<-10..100>");
-
-    let command = secu.create_command("configure_filters");
-
-    command.add_argument("x", "u32");
-
-    let master = builder.create_node("master");
-    master.add_extern_command(&command);
-
-    let network = builder.build().unwrap();
-
-    println!("{network}");
 }
