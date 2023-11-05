@@ -410,6 +410,7 @@ mod tests {
             .any(|m| m.name() == stream.message().name()));
         assert!(node.tx_streams().iter().any(|s| s.name() == "realtime"));
         assert_eq!(stream.message().signals().len(), 1);
+
     }
 
     #[test]

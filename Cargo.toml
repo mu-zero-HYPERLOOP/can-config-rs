@@ -1,5 +1,5 @@
 [package]
-name = "canzero-config-rs"
+name = "can-config-rs"
 version = "0.1.0"
 edition = "2021"
 
