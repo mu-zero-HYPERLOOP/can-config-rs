@@ -1,7 +1,7 @@
 
 pub type Result<T> = std::result::Result<T, ConfigError>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConfigError {
     InvalidRange(String),
     InvalidType(String),
