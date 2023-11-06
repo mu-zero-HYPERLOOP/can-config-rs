@@ -109,6 +109,7 @@ pub enum ObjectEntryAccess {
 pub struct ObjectEntry {
     name: String,
     description: Option<String>,
+    unit : Option<String>,
     id: u32,
     ty: TypeRef,
     access: ObjectEntryAccess,
@@ -340,6 +341,15 @@ impl ObjectEntry {
     }
     pub fn ty(&self) -> &TypeRef {
         &self.ty
+    }
+    pub fn access(&self) -> &ObjectEntryAccess {
+        &self.access
+    }
+    pub fn unit(&self) -> Option<&str> {
+        match &self.unit {
+            Some(unit) => Some(&unit),
+            None => None,
+        }
     }
 }
 
@@ -633,7 +643,7 @@ impl Display for Network {
             }
             writeln!(f, "{s3}object_entries:")?;
             for entry in node.object_entries() {
-                writeln!(f, "{s4}{} : {}", entry.name(), entry.ty().name())?;
+                writeln!(f, "{s4}{:?} {} : {} ({:?})", entry.access(), entry.name(), entry.ty().name(), entry.unit())?;
             }
             writeln!(f, "{s3}tx_streams:")?;
             for stream in node.tx_streams() {
@@ -2121,6 +2131,7 @@ impl NetworkBuilder {
                     name: object_entry_data.name.clone(),
                     description: object_entry_data.description.clone(),
                     access: object_entry_data.access.clone(),
+                    unit : object_entry_data.unit.clone(),
                     id,
                     ty,
                     visibility: object_entry_data.visibility.clone(),
