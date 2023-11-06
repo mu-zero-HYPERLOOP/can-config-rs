@@ -612,6 +612,9 @@ impl Display for Network {
         writeln!(f, "{s1}nodes:")?;
         for node in &self.nodes {
             writeln!(f, "{s2}{}:", node.name)?;
+            if node.description().is_some() {
+                writeln!(f, "{s3}description : {}", node.description().unwrap())?;
+            }
             writeln!(f, "{s3}tx_messages:")?;
             for tx_message in node.tx_messages() {
                 writeln!(f, "{s4}{}", tx_message.name())?;
