@@ -684,6 +684,13 @@ impl Display for Network {
     }
 }
 
+unsafe impl Send for Message {}
+unsafe impl Send for Type {}
+unsafe impl Send for Signal {}
+unsafe impl Send for ObjectEntry {}
+unsafe impl Send for Network {}
+unsafe impl Send for Stream {}
+
 // **************************************************************************
 // **************************************************************************
 // **************************************************************************
@@ -2312,3 +2319,4 @@ impl NetworkBuilder {
         }))
     }
 }
+
