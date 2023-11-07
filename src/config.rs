@@ -116,7 +116,7 @@ pub struct ObjectEntry {
     visibility: Visibility,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum MessageId {
     StandardId(u32),
     ExtendedId(u32),
