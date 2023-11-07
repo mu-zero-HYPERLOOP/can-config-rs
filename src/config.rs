@@ -1,13 +1,13 @@
-use std::{cell::RefCell, cmp::Ordering, fmt::Display, rc::Rc};
+use std::{cell::RefCell, cmp::Ordering, fmt::Display, rc::Rc, sync::Arc};
 
 use crate::errors;
 
-type ConfigRef<T> = Rc<T>;
+type ConfigRef<T> = Arc<T>;
 
 type NetworkRef = ConfigRef<Network>;
 
 fn make_config_ref<T>(value: T) -> ConfigRef<T> {
-    Rc::new(value)
+    Arc::new(value)
 }
 
 #[derive(Debug)]
