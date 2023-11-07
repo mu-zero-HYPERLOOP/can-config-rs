@@ -85,7 +85,7 @@ pub struct Command {
     visibility: Visibility,
 }
 
-type StreamRef = ConfigRef<Stream>;
+pub type StreamRef = ConfigRef<Stream>;
 
 #[derive(Debug)]
 pub struct Stream {
