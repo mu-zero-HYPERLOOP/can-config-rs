@@ -4,7 +4,7 @@ use crate::errors;
 
 type ConfigRef<T> = Arc<T>;
 
-type NetworkRef = ConfigRef<Network>;
+pub type NetworkRef = ConfigRef<Network>;
 
 fn make_config_ref<T>(value: T) -> ConfigRef<T> {
     Arc::new(value)
