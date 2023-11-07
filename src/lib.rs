@@ -440,4 +440,23 @@ mod tests {
         assert!(receiver.rx_messages().iter().any(|m| m.name() == stream.message().name()));
         
     }
+
+    // this is not a clean test it just checks that something is not crashing
+    #[test]
+    fn create_stream_receiver_2_reproduce() {
+        let builder = NetworkBuilder::new();
+        let secu = builder.create_node("secu");
+        secu.create_object_entry("cpu_temperature", "d8<-10..100>");
+        secu.create_object_entry("bcu_temperature", "d8<-10..100>");
+
+        let tx_stream = secu.create_stream("ecu_temperatures");
+        tx_stream.add_entry("cpu_temperature");
+        tx_stream.add_entry("bcu_temperature");
+        
+        let master = builder.create_node("master");
+        let rx_stream = master.receive_stream("secu", "ecu_temperatures");
+        rx_stream.map("cpu_temperature", "secu_cpu_temperature");
+
+        builder.build().unwrap();
+    }
 }

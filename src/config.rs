@@ -1110,7 +1110,7 @@ impl NodeBuilder {
         stream_builder
     }
 
-    pub fn receive_stream(&self, tx_node_name: &str, name: &str) -> ReceiveStreamBuilder {
+    pub fn receive_stream(&self, tx_node_name: &str, tx_stream_name: &str) -> ReceiveStreamBuilder {
         let node_data = self.0.borrow();
         if tx_node_name == node_data.name {
             panic!("can't receive local stream");
@@ -1132,11 +1132,11 @@ impl NodeBuilder {
         let tx_stream_opt = tx_node_data
             .tx_streams
             .iter()
-            .find(|s| s.0.borrow().name == name)
+            .find(|s| s.0.borrow().name == tx_stream_name)
             .cloned();
         let tx_stream = match tx_stream_opt {
             Some(tx_stream) => tx_stream,
-            None => tx_node.create_stream(name),
+            None => tx_node.create_stream(tx_stream_name),
         };
         drop(node_data);
 
@@ -2258,7 +2258,7 @@ impl NetworkBuilder {
                         Ordering::Greater
                     }
                 });
-                let oe_count = tx_stream.mappings.len();
+                let oe_count = builder_mapping.len();
                 let mut mappings = vec![];
                 let mut j = 0;
                 let rx_node_data = rx_stream_data.rx_node.0.borrow();
