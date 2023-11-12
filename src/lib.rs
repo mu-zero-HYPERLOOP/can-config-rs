@@ -1,9 +1,12 @@
-pub mod config;
+
 pub mod errors;
+pub mod config;
+pub mod builder;
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{NetworkBuilder, Signal, SignalType, Type};
+    use crate::{builder::NetworkBuilder, config::{Type, SignalType, signal::Signal}};
+
 
     #[test]
     fn set_baudrate() {

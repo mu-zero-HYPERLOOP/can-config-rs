@@ -1,4 +1,5 @@
-use crate::config::{NetworkBuilder};
+use can_config_rs::builder::NetworkBuilder;
+
 
 mod config;
 mod errors;

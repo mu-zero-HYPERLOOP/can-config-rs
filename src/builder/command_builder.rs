@@ -1,0 +1,68 @@
+use crate::config::Visibility;
+
+use super::{BuilderRef, NodeBuilder, MessageBuilder, MessageTypeFormatBuilder, MessagePriority, make_builder_ref};
+
+
+#[derive(Debug, Clone)]
+pub struct CommandBuilder(pub BuilderRef<CommandData>);
+#[derive(Debug)]
+pub struct CommandData {
+    pub tx_node: NodeBuilder,
+    pub name: String,
+    pub description: Option<String>,
+    pub call_message: MessageBuilder,
+    pub call_message_format: MessageTypeFormatBuilder,
+    pub resp_message: MessageBuilder,
+    pub visibility: Visibility,
+}
+
+impl CommandBuilder {
+    pub fn new(name: &str, tx_node_builder: &NodeBuilder) -> CommandBuilder {
+        let node_data = tx_node_builder.0.borrow();
+        let network_builder = &node_data.network_builder;
+        let tx_message =
+            network_builder.create_message(&format!("{}_{}_command_req", node_data.name, name));
+        tx_message.hide();
+        tx_message.set_any_std_id(MessagePriority::High);
+        let tx_message_format = tx_message.make_type_format();
+        tx_message_format.add_type("command_req_header", "header");
+
+        let rx_message =
+            network_builder.create_message(&format!("{}_{}_command_resp", node_data.name, name));
+        rx_message.hide();
+        rx_message.set_any_std_id(MessagePriority::Low);
+        let rx_message_format = rx_message.make_type_format();
+        rx_message_format.add_type("command_resp_header", "header");
+
+        CommandBuilder(make_builder_ref(CommandData {
+            name: name.to_owned(),
+            description: None,
+            call_message: tx_message,
+            call_message_format: tx_message_format,
+            resp_message: rx_message,
+            tx_node: tx_node_builder.clone(),
+            visibility: Visibility::Global,
+        }))
+    }
+    pub fn hide(&self) {
+        let mut command_data = self.0.borrow_mut();
+        command_data.visibility = Visibility::Static;
+    }
+    pub fn set_priority(&self, priority: MessagePriority) {
+        let command_data = self.0.borrow();
+        command_data.call_message.set_any_std_id(priority);
+    }
+    pub fn add_description(&self, name: &str) {
+        let mut command_data = self.0.borrow_mut();
+        command_data.description = Some(name.to_owned());
+    }
+    pub fn add_argument(&self, name: &str, ty: &str) {
+        let command_data = self.0.borrow();
+        command_data.call_message_format.add_type(ty, name);
+    }
+    pub fn add_callee(&self, name: &str) {
+        let network_builder = self.0.borrow().tx_node.0.borrow().network_builder.clone();
+        let callee = network_builder.create_node(name);
+        callee.add_extern_command(&self);
+    }
+}
