@@ -1,8 +1,9 @@
 use can_config_rs::builder::NetworkBuilder;
 
 
-mod config;
-mod errors;
+pub mod builder;
+pub mod config;
+pub mod errors;
 
 fn main() {
     let builder = NetworkBuilder::new();

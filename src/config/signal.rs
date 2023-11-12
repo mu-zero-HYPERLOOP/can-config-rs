@@ -85,7 +85,16 @@ pub struct Signal {
 }
 
 impl Signal {
-    pub fn new(name : &str, description : Option<&str>, ty : SignalType) -> Signal {
+    pub fn new(name : &str, description : Option<&str>, ty : SignalType, offset : usize) -> Signal {
+        Signal {
+            name : name.to_owned(),
+            description : description.map(|s| s.to_owned()),
+            ty,
+            offset,
+            value_table : None,
+        }
+    }
+    pub fn create(name : &str, description : Option<&str>, ty : SignalType) -> Signal {
         Signal {
             name : name.to_owned(),
             description : description.map(|s| s.to_owned()),

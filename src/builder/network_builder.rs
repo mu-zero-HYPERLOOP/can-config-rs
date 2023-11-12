@@ -2,9 +2,12 @@ use std::{cell::RefCell, cmp::Ordering};
 
 use crate::{
     config::{
-        make_config_ref, signal::Signal, stream::Stream, Command, ConfigRef, Message, MessageId,
-        Network, NetworkRef, Node, ObjectEntry, SignalRef, SignalType, Type, TypeRef,
-        TypeSignalEncoding, ValueTable,
+        encoding::{CompositeSignalEncoding, PrimitiveSignalEncoding},
+        make_config_ref,
+        signal::Signal,
+        stream::Stream,
+        Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
+        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding, ValueTable,
     },
     errors,
 };
@@ -655,29 +658,60 @@ impl NetworkBuilder {
                 }
                 MessageFormat::Types(type_format_builder) => {
                     let type_format_data = type_format_builder.0.borrow();
-                    let mut encodings = vec![];
+                    let mut attributes: Vec<TypeSignalEncoding> = vec![];
                     let mut signals = vec![];
                     let mut offset: usize = 0;
-                    for (type_name, value_name) in &type_format_data.0 {
-                        let type_ref = Self::resolve_type(&types, type_name)?;
-                        let type_signals = Self::type_to_signals(
-                            type_ref.clone(),
-                            &message_data.name,
-                            value_name,
-                            type_name,
-                            &mut offset,
-                        );
 
-                        signals.extend_from_slice(&type_signals);
+                    pub fn build_attribute(ty: &TypeRef, name: &str, offset : &mut usize, prefix : &str, signals : &mut Vec<SignalRef>) -> TypeSignalEncoding {
+                        match ty as &Type {
+                            Type::Primitive(signal_type) => {
+                                let signal = make_config_ref(Signal::new(&format!("{prefix}_{name}"), None, signal_type.clone(), *offset));
+                                signals.push(signal.clone());
+                                *offset += signal.size() as usize;
+                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(name.to_owned(), ty.clone(), signal))
+                            }
+                            Type::Struct {
+                                name,
+                                description,
+                                attribs,
+                                visibility,
+                            } => {
+                                let mut attributes = vec![];
+                                for (attrib_name, attrib_type) in attribs {
+                                    attributes.push(build_attribute(attrib_type, attrib_name, offset, &format!("{prefix}_{name}"), signals));
+                                }
+                                TypeSignalEncoding::Composite(CompositeSignalEncoding::new(
+                                        name.to_owned(),
+                                        attributes,
+                                        ty.clone()))
 
-                        encodings.push(TypeSignalEncoding::new (
-                            value_name.to_owned(),
-                            type_ref,
-                            type_signals,
-                        ));
+                            }
+                            Type::Enum {
+                                name,
+                                description,
+                                size,
+                                entries,
+                                visibility,
+                            } => {
+                                let max = entries.iter().map(|(x,y)| *y).max().unwrap_or(0);
+                                let size = (max as f64).log2().ceil() as u8;
+                                let byte_offset = *offset;
+                                let signal = make_config_ref(Signal::new(&format!("{prefix}_{name}"), None, SignalType::UnsignedInt{size}, *offset));
+                                signals.push(signal.clone());
+                                *offset += signal.size() as usize;
+                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(name.to_owned(), ty.clone(), signal))
+                            }
+                            Type::Array { len, ty } => todo!(),
+                        }
                     }
 
-                    (signals, Some(encodings))
+                    for (type_name, value_name) in &type_format_data.0 {
+                        let type_ref = Self::resolve_type(&types, type_name)?;
+                        attributes.push(build_attribute(&type_ref, type_name, &mut offset, &format!("value_name"), &mut signals));
+                    }
+                    let encoding = MessageEncoding::new(attributes);
+
+                    (signals, Some(encoding))
                 }
                 MessageFormat::Empty => (vec![], None),
             };
@@ -722,13 +756,31 @@ impl NetworkBuilder {
                     .iter()
                     .find(|m| m.name() == rx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
+
                 match &message_ref.encoding() {
                     Some(encoding) => {
-                        for enc in encoding.iter() {
-                            let ty: &TypeRef = &enc.ty();
-                            if !node_types.contains(ty) {
-                                node_types.push(ty.clone());
+                        pub fn rec_type_acc(
+                            node_types: &mut Vec<TypeRef>,
+                            encoding: &TypeSignalEncoding,
+                        ) {
+                            match encoding {
+                                TypeSignalEncoding::Composite(composite) => {
+                                    if !node_types.contains(composite.ty()) {
+                                        node_types.push(composite.ty().clone());
+                                    }
+                                    for attribute in composite.attributes() {
+                                        rec_type_acc(node_types, attribute);
+                                    }
+                                }
+                                TypeSignalEncoding::Primitive(primitive) => {
+                                    if !node_types.contains(primitive.ty()) {
+                                        node_types.push(primitive.ty().clone());
+                                    }
+                                }
                             }
+                        }
+                        for attribute in encoding.attributes() {
+                            rec_type_acc(&mut node_types, attribute);
                         }
                     }
                     None => (),
@@ -743,11 +795,28 @@ impl NetworkBuilder {
                     .expect("invalid message_builder was probably not added to the network");
                 match &message_ref.encoding() {
                     Some(encoding) => {
-                        for enc in encoding.iter() {
-                            let ty: &TypeRef = &enc.ty();
-                            if !node_types.contains(ty) {
-                                node_types.push(ty.clone());
+                        pub fn rec_type_acc(
+                            node_types: &mut Vec<TypeRef>,
+                            encoding: &TypeSignalEncoding,
+                        ) {
+                            match encoding {
+                                TypeSignalEncoding::Composite(composite) => {
+                                    if !node_types.contains(composite.ty()) {
+                                        node_types.push(composite.ty().clone());
+                                    }
+                                    for attribute in composite.attributes() {
+                                        rec_type_acc(node_types, attribute);
+                                    }
+                                }
+                                TypeSignalEncoding::Primitive(primitive) => {
+                                    if !node_types.contains(primitive.ty()) {
+                                        node_types.push(primitive.ty().clone());
+                                    }
+                                }
                             }
+                        }
+                        for attribute in encoding.attributes() {
+                            rec_type_acc(&mut node_types, attribute);
                         }
                     }
                     None => (),

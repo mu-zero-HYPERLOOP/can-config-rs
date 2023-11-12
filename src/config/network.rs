@@ -119,7 +119,7 @@ impl Display for Network {
             if message.encoding().is_some() {
                 let encodings = message.encoding().unwrap();
                 writeln!(f, "{s3}map_to_types:")?;
-                for encoding in encodings {
+                for encoding in encodings.attributes() {
                     write!(f, "{s4}{} : ", encoding.name())?;
                     match &encoding.ty() as &Type {
                         Type::Primitive(signal_type) => match signal_type {
