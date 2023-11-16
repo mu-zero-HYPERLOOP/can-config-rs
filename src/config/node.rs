@@ -21,10 +21,6 @@ pub struct Node {
     tx_messages: Vec<MessageRef>,
 
     object_entries: Vec<ObjectEntryRef>,
-    get_resp_message: MessageRef,
-    get_req_message: MessageRef,
-    set_resp_message: MessageRef,
-    set_req_message: MessageRef,
 }
 
 impl Node {
@@ -36,11 +32,7 @@ impl Node {
                rx_streams : Vec<StreamRef>,
                rx_messages : Vec<MessageRef>,
                tx_messages : Vec<MessageRef>,
-               object_entries : Vec<ObjectEntryRef>,
-               get_resp_message : MessageRef,
-               get_req_message  : MessageRef,
-               set_resp_message : MessageRef,
-               set_req_message : MessageRef)-> Self{
+               object_entries : Vec<ObjectEntryRef>)-> Self{
         Self {
             name,
             description,
@@ -52,10 +44,6 @@ impl Node {
             rx_messages,
             tx_messages,
             object_entries,
-            get_resp_message,
-            get_req_message,
-            set_resp_message,
-            set_req_message
         }
     }
 
@@ -98,17 +86,5 @@ impl Node {
             Some(some) => Some(&some),
             None => None,
         }
-    }
-    pub fn get_resp_message(&self) -> &Message {
-        &self.get_resp_message
-    }
-    pub fn get_req_message(&self) -> &Message {
-        &self.get_req_message
-    }
-    pub fn set_resp_message(&self) -> &Message {
-        &self.set_resp_message
-    }
-    pub fn set_req_message(&self) -> &Message {
-        &self.set_req_message
     }
 }

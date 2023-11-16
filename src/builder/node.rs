@@ -9,10 +9,6 @@ pub struct NodeData {
     pub description: Option<String>,
     pub commands: Vec<CommandBuilder>,
     pub extern_commands: Vec<CommandBuilder>,
-    pub get_req_message: MessageBuilder,
-    pub get_resp_message: MessageBuilder,
-    pub set_req_message: MessageBuilder,
-    pub set_resp_message: MessageBuilder,
     pub network_builder: NetworkBuilder,
     pub rx_messages: Vec<MessageBuilder>,
     pub tx_messages: Vec<MessageBuilder>,
@@ -24,34 +20,11 @@ pub struct NodeData {
 
 impl NodeBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder) -> NodeBuilder {
-        let get_req_message = network_builder.create_message(&format!("{name}_get_req"));
-        get_req_message.hide();
-        get_req_message.set_any_std_id(MessagePriority::Low);
-        get_req_message.add_description(&format!("get request message for node : {name}"));
-
-        let get_resp_message = network_builder.create_message(&format!("{name}_get_resp"));
-        get_resp_message.hide();
-        get_resp_message.set_any_std_id(MessagePriority::Low);
-        get_resp_message.add_description(&format!("get response message for node : {name}"));
-
-        let set_req_message = network_builder.create_message(&format!("{name}_set_req"));
-        set_req_message.hide();
-        set_req_message.set_any_std_id(MessagePriority::Low);
-        set_req_message.add_description(&format!("set request message for node : {name}"));
-
-        let set_resp_message = network_builder.create_message(&format!("{name}_set_resp"));
-        set_resp_message.hide();
-        set_resp_message.add_description(&format!("set response message for node : {name}"));
-        set_resp_message.set_any_std_id(MessagePriority::Low);
 
         let node_builder = NodeBuilder(make_builder_ref(NodeData {
             name: name.to_owned(),
             description: None,
             network_builder: network_builder.clone(),
-            get_req_message: get_req_message.clone(),
-            get_resp_message: get_resp_message.clone(),
-            set_req_message: set_req_message.clone(),
-            set_resp_message: set_resp_message.clone(),
             commands: vec![],
             extern_commands: vec![],
             tx_messages: vec![],
@@ -60,10 +33,10 @@ impl NodeBuilder {
             tx_streams: vec![],
             rx_streams: vec![],
         }));
-        node_builder.add_rx_message(&get_req_message);
-        node_builder.add_tx_message(&get_resp_message);
-        node_builder.add_rx_message(&set_req_message);
-        node_builder.add_tx_message(&set_resp_message);
+        node_builder.add_rx_message(&network_builder._get_req_message());
+        node_builder.add_tx_message(&network_builder._get_resp_message());
+        node_builder.add_rx_message(&network_builder._set_req_message());
+        node_builder.add_tx_message(&network_builder._set_resp_message());
 
         node_builder
     }

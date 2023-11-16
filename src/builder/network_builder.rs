@@ -1,4 +1,7 @@
-use std::{cell::RefCell, cmp::Ordering};
+use std::{
+    cell::{OnceCell, RefCell},
+    cmp::Ordering,
+};
 
 use crate::{
     config::{
@@ -26,6 +29,10 @@ pub struct NetworkData {
     pub messages: BuilderRef<Vec<MessageBuilder>>,
     pub types: BuilderRef<Vec<TypeBuilder>>,
     pub nodes: BuilderRef<Vec<NodeBuilder>>,
+    pub get_req_message: OnceCell<MessageBuilder>,
+    pub get_resp_message: OnceCell<MessageBuilder>,
+    pub set_req_message: OnceCell<MessageBuilder>,
+    pub set_resp_message: OnceCell<MessageBuilder>,
 }
 
 impl NetworkBuilder {
@@ -35,54 +42,97 @@ impl NetworkBuilder {
             messages: make_builder_ref(vec![]),
             types: make_builder_ref(vec![]),
             nodes: make_builder_ref(vec![]),
+            get_req_message: OnceCell::new(),
+            get_resp_message: OnceCell::new(),
+            set_req_message: OnceCell::new(),
+            set_resp_message: OnceCell::new(),
         }));
 
-        // Setup header types.
-        let command_resp_type = network_builder.define_enum("command_resp_erno");
-        command_resp_type.hide();
-        command_resp_type.add_entry("Ok", Some(0)).unwrap();
-        command_resp_type.add_entry("Error", Some(1)).unwrap();
+        let client_id_name = "client_id";
+        let server_id_name = "server_id";
+        let oe_index_name = "od_index";
+        let sof_name = "sof";
+        let eof_name = "eof";
+        let toggle_name = "toggle";
 
-        let command_resp_header_builder = network_builder.define_struct("command_resp_header");
-        command_resp_header_builder.hide();
-        command_resp_header_builder
-            .add_attribute("erno", "command_resp_erno")
-            .unwrap();
-
-        let command_req_header_builder = network_builder.define_struct("command_req_header");
-        command_req_header_builder.hide();
+        let get_resp_erno = network_builder.define_enum("get_resp_erno");
+        get_resp_erno.add_entry("Success", Some(0)).unwrap();
+        get_resp_erno.add_entry("Error", Some(1)).unwrap();
 
         let set_resp_erno = network_builder.define_enum("set_resp_erno");
-        set_resp_erno.hide();
-        set_resp_erno.add_entry("Ok", Some(0)).unwrap();
+        set_resp_erno.add_entry("Success", Some(0)).unwrap();
         set_resp_erno.add_entry("Error", Some(1)).unwrap();
 
+        let get_req_message = network_builder.create_message("get_req");
+        let get_req_format = get_req_message.make_type_format();
         let get_req_header = network_builder.define_struct("get_req_header");
-        get_req_header.hide();
-        get_req_header
-            .add_attribute("object_entry_index", "u16")
+        get_req_header.add_attribute(oe_index_name, "u13").unwrap();
+        get_req_header.add_attribute(client_id_name, "u8").unwrap();
+        get_req_header.add_attribute(server_id_name, "u8").unwrap();
+        get_req_format.add_type("get_req_header", "header");
+        network_builder
+            .0
+            .borrow_mut()
+            .get_req_message
+            .set(get_req_message)
             .unwrap();
 
+        let get_resp_message = network_builder.create_message("get_resp");
+        let get_resp_format = get_resp_message.make_type_format();
         let get_resp_header = network_builder.define_struct("get_resp_header");
-        get_resp_header.hide();
-        get_resp_header
-            .add_attribute("object_entry_index", "u16")
+        get_resp_header.add_attribute(sof_name, "u1").unwrap();
+        get_resp_header.add_attribute(eof_name, "u1").unwrap();
+        get_resp_header.add_attribute(toggle_name, "u1").unwrap();
+        get_resp_header.add_attribute(oe_index_name, "u13").unwrap();
+        get_resp_header.add_attribute(client_id_name, "u8").unwrap();
+        get_resp_header.add_attribute(server_id_name, "u8").unwrap();
+        get_resp_format.add_type("get_resp_header", "header");
+        get_resp_format.add_type("u32", "data");
+        network_builder
+            .0
+            .borrow_mut()
+            .get_resp_message
+            .set(get_resp_message)
             .unwrap();
 
+        let set_req_message = network_builder.create_message("set_req");
+        let set_req_format = set_req_message.make_type_format();
         let set_req_header = network_builder.define_struct("set_req_header");
-        set_req_header.hide();
-        set_req_header
-            .add_attribute("object_entry_index", "u16")
+        set_req_header.add_attribute(sof_name, "u1").unwrap();
+        set_req_header.add_attribute(eof_name, "u1").unwrap();
+        set_req_header.add_attribute(toggle_name, "u1").unwrap();
+        set_req_header.add_attribute(oe_index_name, "u13").unwrap();
+        set_req_header.add_attribute(client_id_name, "u8").unwrap();
+        set_req_header.add_attribute(server_id_name, "u8").unwrap();
+        set_req_format.add_type("set_req_header", "header");
+        set_req_format.add_type("u32", "data");
+        network_builder
+            .0
+            .borrow_mut()
+            .set_req_message
+            .set(set_req_message)
             .unwrap();
 
+        let set_resp_message = network_builder.create_message("set_resp");
+        let set_resp_format = set_resp_message.make_type_format();
         let set_resp_header = network_builder.define_struct("set_resp_header");
-        set_resp_header.hide();
+        set_resp_header.add_attribute(client_id_name, "u8").unwrap();
+        set_resp_header.add_attribute(server_id_name, "u8").unwrap();
         set_resp_header
-            .add_attribute("object_entry_index", "u16")
+            .add_attribute("erno", "set_resp_erno")
             .unwrap();
-        set_resp_header
-            .add_attribute("erno", "command_resp_erno")
+        set_resp_format.add_type("set_resp_header", "header");
+        network_builder
+            .0
+            .borrow_mut()
+            .set_resp_message
+            .set(set_resp_message)
             .unwrap();
+
+
+        let command_resp = network_builder.define_enum("command_resp_erno");
+        command_resp.add_entry("Success", Some(0)).unwrap();
+        command_resp.add_entry("Error", Some(1)).unwrap();
 
         network_builder
     }
@@ -133,6 +183,22 @@ impl NetworkBuilder {
             return node_builder;
         };
         node
+    }
+
+    pub fn _get_req_message(&self) -> MessageBuilder {
+        self.0.borrow().get_req_message.get().unwrap().clone()
+    }
+
+    pub fn _get_resp_message(&self) -> MessageBuilder {
+        self.0.borrow().get_resp_message.get().unwrap().clone()
+    }
+
+    pub fn _set_req_message(&self) -> MessageBuilder {
+        self.0.borrow().set_req_message.get().unwrap().clone()
+    }
+
+    pub fn _set_resp_message(&self) -> MessageBuilder {
+        self.0.borrow().set_resp_message.get().unwrap().clone()
     }
 }
 
@@ -662,13 +728,28 @@ impl NetworkBuilder {
                     let mut signals = vec![];
                     let mut offset: usize = 0;
 
-                    pub fn build_attribute(ty: &TypeRef, name: &str, offset : &mut usize, prefix : &str, signals : &mut Vec<SignalRef>) -> TypeSignalEncoding {
+                    pub fn build_attribute(
+                        ty: &TypeRef,
+                        name: &str,
+                        offset: &mut usize,
+                        prefix: &str,
+                        signals: &mut Vec<SignalRef>,
+                    ) -> TypeSignalEncoding {
                         match ty as &Type {
                             Type::Primitive(signal_type) => {
-                                let signal = make_config_ref(Signal::new(&format!("{prefix}_{name}"), None, signal_type.clone(), *offset));
+                                let signal = make_config_ref(Signal::new(
+                                    &format!("{prefix}_{name}"),
+                                    None,
+                                    signal_type.clone(),
+                                    *offset,
+                                ));
                                 signals.push(signal.clone());
                                 *offset += signal.size() as usize;
-                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(name.to_owned(), ty.clone(), signal))
+                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(
+                                    name.to_owned(),
+                                    ty.clone(),
+                                    signal,
+                                ))
                             }
                             Type::Struct {
                                 name,
@@ -678,13 +759,19 @@ impl NetworkBuilder {
                             } => {
                                 let mut attributes = vec![];
                                 for (attrib_name, attrib_type) in attribs {
-                                    attributes.push(build_attribute(attrib_type, attrib_name, offset, &format!("{prefix}_{name}"), signals));
+                                    attributes.push(build_attribute(
+                                        attrib_type,
+                                        attrib_name,
+                                        offset,
+                                        &format!("{prefix}_{name}"),
+                                        signals,
+                                    ));
                                 }
                                 TypeSignalEncoding::Composite(CompositeSignalEncoding::new(
-                                        name.to_owned(),
-                                        attributes,
-                                        ty.clone()))
-
+                                    name.to_owned(),
+                                    attributes,
+                                    ty.clone(),
+                                ))
                             }
                             Type::Enum {
                                 name,
@@ -693,13 +780,22 @@ impl NetworkBuilder {
                                 entries,
                                 visibility,
                             } => {
-                                let max = entries.iter().map(|(x,y)| *y).max().unwrap_or(0);
+                                let max = entries.iter().map(|(x, y)| *y).max().unwrap_or(0);
                                 let size = (max as f64).log2().ceil() as u8;
                                 let byte_offset = *offset;
-                                let signal = make_config_ref(Signal::new(&format!("{prefix}_{name}"), None, SignalType::UnsignedInt{size}, *offset));
+                                let signal = make_config_ref(Signal::new(
+                                    &format!("{prefix}_{name}"),
+                                    None,
+                                    SignalType::UnsignedInt { size },
+                                    *offset,
+                                ));
                                 signals.push(signal.clone());
                                 *offset += signal.size() as usize;
-                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(name.to_owned(), ty.clone(), signal))
+                                TypeSignalEncoding::Primitive(PrimitiveSignalEncoding::new(
+                                    name.to_owned(),
+                                    ty.clone(),
+                                    signal,
+                                ))
                             }
                             Type::Array { len, ty } => todo!(),
                         }
@@ -707,7 +803,13 @@ impl NetworkBuilder {
 
                     for (type_name, value_name) in &type_format_data.0 {
                         let type_ref = Self::resolve_type(&types, type_name)?;
-                        attributes.push(build_attribute(&type_ref, type_name, &mut offset, &format!("value_name"), &mut signals));
+                        attributes.push(build_attribute(
+                            &type_ref,
+                            type_name,
+                            &mut offset,
+                            &format!("value_name"),
+                            &mut signals,
+                        ));
                     }
                     let encoding = MessageEncoding::new(attributes);
 
@@ -725,23 +827,29 @@ impl NetworkBuilder {
                 message_data.visibility.clone(),
             )));
         }
+        let get_resp_message = messages
+            .iter()
+            .find(|m| m.name() == builder.get_resp_message.get().unwrap().0.borrow().name)
+            .unwrap()
+            .clone();
+        let get_req_message = messages
+            .iter()
+            .find(|m| m.name() == builder.get_req_message.get().unwrap().0.borrow().name)
+            .unwrap()
+            .clone();
+        let set_resp_message = messages
+            .iter()
+            .find(|m| m.name() == builder.set_resp_message.get().unwrap().0.borrow().name)
+            .unwrap()
+            .clone();
+        let set_req_message = messages
+            .iter()
+            .find(|m| m.name() == builder.set_req_message.get().unwrap().0.borrow().name)
+            .unwrap()
+            .clone();
 
         // add get and set req,resp to all nodes
         let n_nodes = builder.nodes.borrow().len();
-        for i in 0..n_nodes {
-            for j in 0..n_nodes {
-                if i == j {
-                    continue;
-                }
-                let server_builder = &builder.nodes.borrow()[i];
-                let server_data = server_builder.0.borrow();
-                let client_builder = &builder.nodes.borrow()[j];
-                client_builder.add_tx_message(&server_data.get_req_message);
-                client_builder.add_rx_message(&server_data.get_resp_message);
-                client_builder.add_tx_message(&server_data.set_req_message);
-                client_builder.add_rx_message(&server_data.set_resp_message);
-            }
-        }
 
         let mut nodes = vec![];
         // first create messages with tx and rx messages.
@@ -896,28 +1004,18 @@ impl NetworkBuilder {
                     stream_data.visbility.clone(),
                 )));
             }
-            let node_types = Self::topo_sort_types(&node_types);
+            let mut node_types = Self::topo_sort_types(&node_types);
+            // every node has to include the get_resp_erno type because it is not included by
+            // default.
 
-            let get_resp_message = tx_messages
-                .iter()
-                .find(|m| m.name() == node_data.get_resp_message.0.borrow().name)
-                .unwrap()
-                .clone();
-            let get_req_message = rx_messages
-                .iter()
-                .find(|m| m.name() == node_data.get_req_message.0.borrow().name)
-                .unwrap()
-                .clone();
-            let set_resp_message = tx_messages
-                .iter()
-                .find(|m| m.name() == node_data.set_resp_message.0.borrow().name)
-                .unwrap()
-                .clone();
-            let set_req_message = rx_messages
-                .iter()
-                .find(|m| m.name() == node_data.set_req_message.0.borrow().name)
-                .unwrap()
-                .clone();
+            if node_types.iter().any(|t| t.name() == "get_resp_erno") {
+                let get_resp_erno_enum = types
+                    .iter()
+                    .find(|t| t.name() == "get_resp_erno")
+                    .expect("get_resp_erno is not defined")
+                    .clone();
+                node_types.push(get_resp_erno_enum);
+            }
 
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
@@ -930,10 +1028,6 @@ impl NetworkBuilder {
                 rx_messages,
                 tx_messages,
                 object_entries,
-                get_resp_message,
-                get_req_message,
-                set_resp_message,
-                set_req_message,
             )));
         }
 
@@ -1042,6 +1136,10 @@ impl NetworkBuilder {
             nodes,
             messages,
             types,
+            get_req_message,
+            get_resp_message,
+            set_req_message,
+            set_resp_message,
         )))
     }
 }

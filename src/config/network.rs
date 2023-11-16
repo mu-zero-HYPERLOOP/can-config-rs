@@ -12,6 +12,11 @@ pub struct Network {
     nodes: Vec<NodeRef>,
     messages: Vec<MessageRef>,
     types: Vec<TypeRef>,
+    get_resp_message : MessageRef,
+    get_req_message : MessageRef,
+    set_resp_message : MessageRef,
+    set_req_message : MessageRef,
+
 }
 
 impl Network {
@@ -21,6 +26,10 @@ impl Network {
         nodes: Vec<NodeRef>,
         messages: Vec<MessageRef>,
         types: Vec<TypeRef>,
+        get_req_message : MessageRef,
+        get_resp_message : MessageRef,
+        set_req_message : MessageRef,
+        set_resp_message : MessageRef
     ) -> Network {
         Network {
             types,
@@ -28,6 +37,10 @@ impl Network {
             baudrate,
             nodes,
             messages,
+            get_req_message,
+            get_resp_message,
+            set_req_message,
+            set_resp_message,
         }
     }
     pub fn nodes(&self) -> &Vec<NodeRef> {
@@ -44,6 +57,18 @@ impl Network {
     }
     pub fn types(&self) -> &Vec<TypeRef> {
         &self.types
+    }
+    pub fn get_resp_message(&self) -> &MessageRef {
+        &self.get_resp_message
+    }
+    pub fn get_req_message(&self) -> &MessageRef {
+        &self.get_req_message
+    }
+    pub fn set_resp_message(&self) -> &MessageRef {
+        &self.set_resp_message
+    }
+    pub fn set_req_message(&self) -> &MessageRef {
+        &self.set_req_message
     }
 }
 

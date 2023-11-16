@@ -25,14 +25,13 @@ impl CommandBuilder {
         tx_message.hide();
         tx_message.set_any_std_id(MessagePriority::High);
         let tx_message_format = tx_message.make_type_format();
-        tx_message_format.add_type("command_req_header", "header");
 
         let rx_message =
             network_builder.create_message(&format!("{}_{}_command_resp", node_data.name, name));
         rx_message.hide();
         rx_message.set_any_std_id(MessagePriority::Low);
         let rx_message_format = rx_message.make_type_format();
-        rx_message_format.add_type("command_resp_header", "header");
+        rx_message_format.add_type("command_resp_erno", "erno");
 
         CommandBuilder(make_builder_ref(CommandData {
             name: name.to_owned(),
