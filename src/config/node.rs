@@ -8,6 +8,7 @@ pub type NodeRef = ConfigRef<Node>;
 pub struct Node {
     name: String,
     description: Option<String>,
+    id : u16,
 
     types: Vec<TypeRef>,
 
@@ -24,7 +25,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(name : String, description : Option<String>,
+    pub fn new(name : String, description : Option<String>, id : u16,
                types : Vec<TypeRef>,
                commands : Vec<CommandRef>,
                extern_commands : Vec<(String, CommandRef)>,
@@ -36,6 +37,7 @@ impl Node {
         Self {
             name,
             description,
+            id,
             types,
             commands,
             extern_commands,
@@ -86,5 +88,8 @@ impl Node {
             Some(some) => Some(&some),
             None => None,
         }
+    }
+    pub fn id(&self) -> u16 {
+        self.id
     }
 }
