@@ -58,6 +58,12 @@ impl Message {
     pub fn signals(&self) -> &Vec<SignalRef> {
         &self.signals
     }
+    pub fn dlc(&self) -> u8 { 
+        self.dlc
+    }
+    pub fn visibility(&self) -> &Visibility {
+        &self.visibility
+    }
 }
 
 
