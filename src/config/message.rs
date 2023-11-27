@@ -19,6 +19,7 @@ pub struct Message {
     encoding: Option<MessageEncoding>,
     signals: Vec<SignalRef>,
     visibility: Visibility,
+    dlc : u8,
 }
 
 
@@ -28,7 +29,7 @@ impl Message {
                id : MessageId,
                encoding : Option<MessageEncoding>,
                signals : Vec<SignalRef>,
-               visibility : Visibility) -> Self {
+               visibility : Visibility, dlc : u8) -> Self {
         Self {
             name,
             description,
@@ -36,6 +37,7 @@ impl Message {
             encoding,
             signals,
             visibility,
+            dlc,
         }
     }
     pub fn id(&self) -> &MessageId {
