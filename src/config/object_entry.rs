@@ -1,4 +1,6 @@
-use super::{ConfigRef, TypeRef, Visibility};
+use std::cell::OnceCell;
+
+use super::{ConfigRef, TypeRef, Visibility, NodeRef};
 
 
 pub type ObjectEntryRef = ConfigRef<ObjectEntry>;
@@ -19,6 +21,7 @@ pub struct ObjectEntry {
     ty: TypeRef,
     access: ObjectEntryAccess,
     visibility: Visibility,
+    node : OnceCell<NodeRef>,
 }
 
 impl ObjectEntry {
@@ -35,7 +38,8 @@ impl ObjectEntry {
             id,
             ty,
             access,
-            visibility
+            visibility,
+            node : OnceCell::new(),
         }
     }
     pub fn id(&self) -> u32 {
@@ -61,5 +65,11 @@ impl ObjectEntry {
             Some(unit) => Some(&unit),
             None => None,
         }
+    }
+    pub fn __set_node(&self, node : NodeRef){
+        self.node.set(node).expect("can't set the node of a object entry");
+    }
+    pub fn node(&self) -> &NodeRef {
+        self.node.get().unwrap()
     }
 }

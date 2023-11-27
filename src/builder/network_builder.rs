@@ -1,6 +1,6 @@
 use std::{
     cell::{OnceCell, RefCell},
-    cmp::Ordering,
+    cmp::Ordering, sync::Arc,
 };
 
 use crate::{
@@ -1126,10 +1126,18 @@ impl NetworkBuilder {
             }
         }
 
-        let nodes = nodes
+        let nodes : Vec<ConfigRef<Node>>= nodes
             .into_iter()
             .map(|n| make_config_ref(n.into_inner()))
             .collect();
+
+        // set node for all object entries!
+        for node in &nodes {
+            for oe in node.object_entries() {
+                oe.__set_node(node.clone());
+            }
+        }
+
 
         Ok(make_config_ref(Network::new(
             baudrate,
