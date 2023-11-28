@@ -1,4 +1,4 @@
-use std::cell::OnceCell;
+use std::{cell::OnceCell, sync::OnceLock};
 
 use super::{ConfigRef, TypeRef, Visibility, NodeRef};
 
@@ -21,7 +21,7 @@ pub struct ObjectEntry {
     ty: TypeRef,
     access: ObjectEntryAccess,
     visibility: Visibility,
-    node : OnceCell<NodeRef>,
+    node : OnceLock<NodeRef>,
 }
 
 impl ObjectEntry {
@@ -39,7 +39,7 @@ impl ObjectEntry {
             ty,
             access,
             visibility,
-            node : OnceCell::new(),
+            node : OnceLock::new(),
         }
     }
     pub fn id(&self) -> u32 {
