@@ -1,6 +1,6 @@
 use std::{
     cell::{OnceCell, RefCell},
-    cmp::Ordering
+    cmp::Ordering,
 };
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
         signal::Signal,
         stream::Stream,
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
-        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding
+        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding,
     },
     errors,
 };
@@ -128,7 +128,6 @@ impl NetworkBuilder {
             .set_resp_message
             .set(set_resp_message)
             .unwrap();
-
 
         let command_resp = network_builder.define_enum("command_resp_erno");
         command_resp.add_entry("Success", Some(0)).unwrap();
@@ -425,9 +424,10 @@ impl NetworkBuilder {
                 },
                 _ => (),
             }
-            nodes.push(Node { 
-                // index: i, 
-                adj_list })
+            nodes.push(Node {
+                // index: i,
+                adj_list,
+            })
         }
         let mut stack: Vec<usize> = vec![];
         let mut visited = vec![false; nodes.len()];
@@ -755,9 +755,9 @@ impl NetworkBuilder {
                             }
                             Type::Struct {
                                 name,
-                                description : _,
+                                description: _,
                                 attribs,
-                                visibility : _,
+                                visibility: _,
                             } => {
                                 let mut attributes = vec![];
                                 for (attrib_name, attrib_type) in attribs {
@@ -777,10 +777,10 @@ impl NetworkBuilder {
                             }
                             Type::Enum {
                                 name,
-                                description : _,
-                                size : _,
+                                description: _,
+                                size: _,
                                 entries,
-                                visibility : _,
+                                visibility: _,
                             } => {
                                 let max = entries.iter().map(|(_, y)| *y).max().unwrap_or(0);
                                 let size = (max as f64).log2().ceil() as u8;
@@ -798,7 +798,7 @@ impl NetworkBuilder {
                                     signal,
                                 ))
                             }
-                            Type::Array { len : _, ty : _ } => todo!(),
+                            Type::Array { len: _, ty: _ } => todo!(),
                         }
                     }
 
@@ -857,6 +857,40 @@ impl NetworkBuilder {
             .unwrap()
             .clone();
 
+        pub fn rec_type_acc(node_types: &mut Vec<TypeRef>, encoding: &TypeSignalEncoding) {
+            match encoding {
+                TypeSignalEncoding::Composite(composite) => {
+                    if !node_types.contains(composite.ty()) {
+                        node_types.push(composite.ty().clone());
+                    }
+                    for attribute in composite.attributes() {
+                        rec_type_acc(node_types, attribute);
+                    }
+                }
+                TypeSignalEncoding::Primitive(primitive) => match primitive.ty() as &Type {
+                    Type::Primitive(_) => (),
+                    Type::Struct {
+                        name: _,
+                        description: _,
+                        attribs: _,
+                        visibility: _,
+                    } => panic!("not a primitive"),
+                    Type::Enum {
+                        name: _,
+                        description: _,
+                        size: _,
+                        entries: _,
+                        visibility: _,
+                    } => {
+                        if !node_types.contains(primitive.ty()) {
+                            node_types.push(primitive.ty().clone());
+                        }
+                    }
+                    Type::Array { len: _, ty: _ } => todo!(),
+                },
+            }
+        }
+
         // add get and set req,resp to all nodes
         let n_nodes = builder.nodes.borrow().len();
 
@@ -876,26 +910,6 @@ impl NetworkBuilder {
 
                 match &message_ref.encoding() {
                     Some(encoding) => {
-                        pub fn rec_type_acc(
-                            node_types: &mut Vec<TypeRef>,
-                            encoding: &TypeSignalEncoding,
-                        ) {
-                            match encoding {
-                                TypeSignalEncoding::Composite(composite) => {
-                                    if !node_types.contains(composite.ty()) {
-                                        node_types.push(composite.ty().clone());
-                                    }
-                                    for attribute in composite.attributes() {
-                                        rec_type_acc(node_types, attribute);
-                                    }
-                                }
-                                TypeSignalEncoding::Primitive(primitive) => {
-                                    if !node_types.contains(primitive.ty()) {
-                                        node_types.push(primitive.ty().clone());
-                                    }
-                                }
-                            }
-                        }
                         for attribute in encoding.attributes() {
                             rec_type_acc(&mut node_types, attribute);
                         }
@@ -910,28 +924,9 @@ impl NetworkBuilder {
                     .iter()
                     .find(|m| m.name() == tx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
+                println!("message = {}", message_ref.name());
                 match &message_ref.encoding() {
                     Some(encoding) => {
-                        pub fn rec_type_acc(
-                            node_types: &mut Vec<TypeRef>,
-                            encoding: &TypeSignalEncoding,
-                        ) {
-                            match encoding {
-                                TypeSignalEncoding::Composite(composite) => {
-                                    if !node_types.contains(composite.ty()) {
-                                        node_types.push(composite.ty().clone());
-                                    }
-                                    for attribute in composite.attributes() {
-                                        rec_type_acc(node_types, attribute);
-                                    }
-                                }
-                                TypeSignalEncoding::Primitive(primitive) => {
-                                    if !node_types.contains(primitive.ty()) {
-                                        node_types.push(primitive.ty().clone());
-                                    }
-                                }
-                            }
-                        }
                         for attribute in encoding.attributes() {
                             rec_type_acc(&mut node_types, attribute);
                         }
@@ -968,9 +963,26 @@ impl NetworkBuilder {
             for object_entry_builder in &node_builder.0.borrow().object_entries {
                 let object_entry_data = object_entry_builder.0.borrow();
                 let ty = Self::resolve_type(&mut types, &object_entry_data.ty)?;
-                if !node_types.contains(&ty) {
-                    node_types.push(ty.clone());
+                fn rec_add_type(node_types : &mut Vec<TypeRef>, ty : &TypeRef) {
+                    match ty as &Type {
+                        Type::Primitive(_) => (),
+                        Type::Struct { name : _, description : _, attribs , visibility : _ } => {
+                            if !node_types.contains(ty) {
+                                node_types.push(ty.clone());
+                            }
+                            for (_, attrib_ty) in attribs {
+                                rec_add_type(node_types, attrib_ty);
+                            }
+                        }
+                        Type::Enum { name : _, description : _, size : _ , entries : _, visibility : _ } => {
+                            if !node_types.contains(ty) {
+                                node_types.push(ty.clone());
+                            }
+                        }
+                        Type::Array { len : _, ty : _ } => todo!(),
+                    };
                 }
+                rec_add_type(&mut node_types, &ty);
                 let id = id_acc;
                 id_acc += 1;
                 object_entries.push(make_config_ref(ObjectEntry::new(
@@ -1013,18 +1025,8 @@ impl NetworkBuilder {
                     stream_data.visbility.clone(),
                 )));
             }
-            let mut node_types = Self::topo_sort_types(&node_types);
-            // every node has to include the get_resp_erno type because it is not included by
-            // default.
 
-            if node_types.iter().any(|t| t.name() == "get_resp_erno") {
-                let get_resp_erno_enum = types
-                    .iter()
-                    .find(|t| t.name() == "get_resp_erno")
-                    .expect("get_resp_erno is not defined")
-                    .clone();
-                node_types.push(get_resp_erno_enum);
-            }
+            let node_types = Self::topo_sort_types(&node_types);
 
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
@@ -1135,7 +1137,7 @@ impl NetworkBuilder {
             }
         }
 
-        let nodes : Vec<ConfigRef<Node>>= nodes
+        let nodes: Vec<ConfigRef<Node>> = nodes
             .into_iter()
             .map(|n| make_config_ref(n.into_inner()))
             .collect();
@@ -1146,7 +1148,6 @@ impl NetworkBuilder {
                 oe.__set_node(node.clone());
             }
         }
-
 
         Ok(make_config_ref(Network::new(
             baudrate,
