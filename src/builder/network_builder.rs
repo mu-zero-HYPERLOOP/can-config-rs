@@ -802,11 +802,11 @@ impl NetworkBuilder {
                         }
                     }
 
-                    for (type_name, _) in &type_format_data.0 {
+                    for (type_name, var_name) in &type_format_data.0 {
                         let type_ref = Self::resolve_type(&types, type_name)?;
                         attributes.push(build_attribute(
                             &type_ref,
-                            type_name,
+                            var_name,
                             &mut offset,
                             &format!("value_name"),
                             &mut signals,
