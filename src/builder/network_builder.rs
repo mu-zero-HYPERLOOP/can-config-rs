@@ -754,7 +754,7 @@ impl NetworkBuilder {
                                 ))
                             }
                             Type::Struct {
-                                name,
+                                name : struct_name,
                                 description: _,
                                 attribs,
                                 visibility: _,
@@ -765,7 +765,7 @@ impl NetworkBuilder {
                                         attrib_type,
                                         attrib_name,
                                         offset,
-                                        &format!("{prefix}_{name}"),
+                                        &format!("{prefix}_{struct_name}"),
                                         signals,
                                     ));
                                 }
@@ -776,7 +776,7 @@ impl NetworkBuilder {
                                 ))
                             }
                             Type::Enum {
-                                name,
+                                name : enum_name, 
                                 description: _,
                                 size: _,
                                 entries,
@@ -785,7 +785,7 @@ impl NetworkBuilder {
                                 let max = entries.iter().map(|(_, y)| *y).max().unwrap_or(0);
                                 let size = (max as f64).log2().ceil() as u8;
                                 let signal = make_config_ref(Signal::new(
-                                    &format!("{prefix}_{name}"),
+                                    &format!("{prefix}_{enum_name}"),
                                     None,
                                     SignalType::UnsignedInt { size },
                                     *offset,
