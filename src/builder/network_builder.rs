@@ -824,7 +824,7 @@ impl NetworkBuilder {
                 let signal_max_bit = signal.byte_offset() + signal.size() as usize;
                 max_bit = max_bit.max(signal_max_bit);
             }
-            let dlc = (max_bit as f64).log2().ceil() as u8;
+            let dlc = ((max_bit + 8 - 1) / 8) as u8;
 
             messages.push(make_config_ref(Message::new(
                 message_data.name.clone(),

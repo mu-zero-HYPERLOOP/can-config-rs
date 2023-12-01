@@ -9,10 +9,10 @@ fn main() {
 
     let network_config = network_builder.build().unwrap();
     let secu = network_config.nodes().iter().find(|n| n.name() == "secu").unwrap();
-    let types = secu.types();
+    let messages = secu.tx_messages();
     
-    for ty in types {
-        println!("{}", ty.name());
-    }
+    let get_resp_message = messages.iter().find(|m| m.name() == "get_resp").unwrap();
+    println!("dlc = {}", get_resp_message.dlc());
+    println!("signals = {:?}", get_resp_message.signals());
 
 }

@@ -81,6 +81,7 @@ pub struct Signal {
     pub description: Option<String>,
     pub ty: SignalType,
     pub value_table: Option<ValueTableRef>,
+    // refers to the byte offset!
     pub offset: usize,
 }
 
