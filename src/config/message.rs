@@ -1,7 +1,19 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Duration, cell::OnceCell};
 
-use super::{ConfigRef, MessageEncoding, SignalRef, Visibility};
+use super::{ConfigRef, MessageEncoding, SignalRef, Visibility, bus::BusRef, stream::StreamRef, CommandRef};
 
+
+#[derive(Debug)]
+pub enum MessageUsage {
+    Stream(StreamRef),
+    CommandReq(CommandRef),
+    CommandResp(CommandRef),
+    GetResp,
+    GetReq,
+    SetResp,
+    SetReq,
+    External{interval : Duration},
+}
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum MessageId {
@@ -20,6 +32,8 @@ pub struct Message {
     signals: Vec<SignalRef>,
     visibility: Visibility,
     dlc : u8,
+    bus : BusRef,
+    usage : OnceCell<MessageUsage>,
 }
 
 
@@ -29,7 +43,8 @@ impl Message {
                id : MessageId,
                encoding : Option<MessageEncoding>,
                signals : Vec<SignalRef>,
-               visibility : Visibility, dlc : u8) -> Self {
+               visibility : Visibility, dlc : u8,
+               bus : BusRef) -> Self {
         Self {
             name,
             description,
@@ -38,8 +53,20 @@ impl Message {
             signals,
             visibility,
             dlc,
+            bus,
+            usage : OnceCell::new(),
         }
     }
+    pub fn usage(&self) -> &MessageUsage {
+        self.usage.get().expect("Karl fucked up big time (message usage was not set property while building!)")
+    }
+    pub fn __set_usage(&self, usage : MessageUsage) {
+        self.usage.set(usage).expect("__set_usage can only be called once (when calling NetworkBuilder::build(&self))");
+    }
+    pub fn __get_usage(&self) -> &OnceCell<MessageUsage> {
+        &self.usage
+    }
+
     pub fn id(&self) -> &MessageId {
         &self.id
     }
@@ -63,6 +90,9 @@ impl Message {
     }
     pub fn visibility(&self) -> &Visibility {
         &self.visibility
+    }
+    pub fn bus(&self) -> &BusRef {
+        &self.bus
     }
 }
 

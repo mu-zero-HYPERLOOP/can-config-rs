@@ -31,7 +31,7 @@ impl StreamBuilder {
         let node_data = node_builder.0.borrow();
         let message = node_data
             .network_builder
-            .create_message(&format!("{}_stream_{name}", node_builder.0.borrow().name));
+            .create_message(&format!("{}_stream_{name}", node_builder.0.borrow().name), None);
         drop(node_data);
         node_builder.add_tx_message(&message);
         message.hide();

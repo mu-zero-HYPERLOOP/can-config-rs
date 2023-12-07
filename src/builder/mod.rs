@@ -20,6 +20,8 @@ pub mod node;
 pub mod object_entry_builder;
 pub mod stream_builder;
 pub mod type_builder;
+pub mod bus;
+mod message_resolution_protocol;
 
 type BuilderRef<T> = Rc<RefCell<T>>;
 

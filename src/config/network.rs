@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use super::{ConfigRef, NodeRef, MessageRef, TypeRef, Type, SignalType};
+use super::{ConfigRef, NodeRef, MessageRef, TypeRef, Type, SignalType, bus::BusRef};
 
 
 pub type NetworkRef = ConfigRef<Network>;
@@ -16,7 +16,7 @@ pub struct Network {
     get_req_message : MessageRef,
     set_resp_message : MessageRef,
     set_req_message : MessageRef,
-
+    buses : Vec<BusRef>,
 }
 
 impl Network {
@@ -29,7 +29,8 @@ impl Network {
         get_req_message : MessageRef,
         get_resp_message : MessageRef,
         set_req_message : MessageRef,
-        set_resp_message : MessageRef
+        set_resp_message : MessageRef,
+        buses : Vec<BusRef>,
     ) -> Network {
         Network {
             types,
@@ -41,7 +42,11 @@ impl Network {
             get_resp_message,
             set_req_message,
             set_resp_message,
+            buses
         }
+    }
+    pub fn buses(&self) -> &Vec<BusRef> {
+        &self.buses
     }
     pub fn nodes(&self) -> &Vec<NodeRef> {
         &self.nodes

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::config::Visibility;
 
 use super::{BuilderRef, NodeBuilder, MessageBuilder, MessageTypeFormatBuilder, MessagePriority, make_builder_ref};
@@ -17,17 +19,17 @@ pub struct CommandData {
 }
 
 impl CommandBuilder {
-    pub fn new(name: &str, tx_node_builder: &NodeBuilder) -> CommandBuilder {
+    pub fn new(name: &str, tx_node_builder: &NodeBuilder, expected_interval : Option<Duration>) -> CommandBuilder {
         let node_data = tx_node_builder.0.borrow();
         let network_builder = &node_data.network_builder;
         let tx_message =
-            network_builder.create_message(&format!("{}_{}_command_req", node_data.name, name));
+            network_builder.create_message(&format!("{}_{}_command_req", node_data.name, name), expected_interval);
         tx_message.hide();
         tx_message.set_any_std_id(MessagePriority::High);
         let tx_message_format = tx_message.make_type_format();
 
         let rx_message =
-            network_builder.create_message(&format!("{}_{}_command_resp", node_data.name, name));
+            network_builder.create_message(&format!("{}_{}_command_resp", node_data.name, name), expected_interval);
         rx_message.hide();
         rx_message.set_any_std_id(MessagePriority::Low);
         let rx_message_format = rx_message.make_type_format();

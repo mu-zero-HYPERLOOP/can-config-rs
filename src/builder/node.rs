@@ -1,4 +1,6 @@
-use super::{stream_builder::{ReceiveStreamBuilder, StreamBuilder}, ObjectEntryBuilder, MessageBuilder, NetworkBuilder, CommandBuilder, BuilderRef, MessagePriority, make_builder_ref};
+use std::time::Duration;
+
+use super::{stream_builder::{ReceiveStreamBuilder, StreamBuilder}, ObjectEntryBuilder, MessageBuilder, NetworkBuilder, CommandBuilder, BuilderRef, MessagePriority, make_builder_ref, bus::BusBuilder};
 
 
 #[derive(Debug, Clone)]
@@ -15,6 +17,7 @@ pub struct NodeData {
     pub object_entries: Vec<ObjectEntryBuilder>,
     pub tx_streams: Vec<StreamBuilder>,
     pub rx_streams: Vec<ReceiveStreamBuilder>,
+    pub buses : Vec<BusBuilder>,
 }
 
 
@@ -32,6 +35,7 @@ impl NodeBuilder {
             object_entries: vec![],
             tx_streams: vec![],
             rx_streams: vec![],
+            buses : vec![],
         }));
         node_builder.add_rx_message(&network_builder._get_req_message());
         node_builder.add_tx_message(&network_builder._get_resp_message());
@@ -40,20 +44,43 @@ impl NodeBuilder {
 
         node_builder
     }
+    pub fn assign_bus(&self, bus_name : &str) -> BusBuilder{
+        let mut node_data = self.0.borrow_mut();       
+        let network_data = node_data.network_builder.0.borrow_mut();
+        let bus = network_data.buses.borrow().iter().find(|bus| &bus.0.borrow().name == bus_name).cloned();
+        drop(network_data);
+        match bus {
+            Some(bus) => {
+                node_data.buses.push(bus.clone());
+                bus
+            }
+            None => {
+                let bus = node_data.network_builder.create_bus(bus_name);
+                node_data.buses.push(bus.clone());
+                bus
+            }
+        }
+    }
     pub fn add_description(&self, description: &str) {
         let mut node_data = self.0.borrow_mut();
         node_data.description = Some(description.to_owned());
     }
     pub fn add_tx_message(&self, message_builder: &MessageBuilder) {
-        let mut node_data = self.0.borrow_mut();
-        node_data.tx_messages.push(message_builder.clone());
+        let node_name = self.0.borrow().name.clone();
+        if !message_builder.0.borrow().transmitters.iter().any(|n| &n.0.borrow().name == &node_name) {
+            message_builder.0.borrow_mut().transmitters.push(self.clone());
+        }
+        self.0.borrow_mut().tx_messages.push(message_builder.clone());
     }
     pub fn add_rx_message(&self, message_builder: &MessageBuilder) {
-        let mut node_data = self.0.borrow_mut();
-        node_data.rx_messages.push(message_builder.clone());
+        let node_name = self.0.borrow().name.clone();
+        if !message_builder.0.borrow().receivers.iter().any(|n| &n.0.borrow().name == &node_name) {
+            message_builder.0.borrow_mut().receivers.push(self.clone());
+        }
+        self.0.borrow_mut().rx_messages.push(message_builder.clone());
     }
-    pub fn create_command(&self, name: &str) -> CommandBuilder {
-        let command_builder = CommandBuilder::new(name, &self);
+    pub fn create_command(&self, name: &str, expected_interval : Option<Duration>) -> CommandBuilder {
+        let command_builder = CommandBuilder::new(name, &self, expected_interval);
         let mut node_data = self.0.borrow_mut();
         node_data.commands.push(command_builder.clone());
         node_data

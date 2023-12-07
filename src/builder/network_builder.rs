@@ -1,23 +1,29 @@
 use std::{
     cell::{OnceCell, RefCell},
     cmp::Ordering,
+    time::Duration,
 };
 
 use crate::{
     config::{
+        self,
+        bus::BusRef,
         encoding::{CompositeSignalEncoding, PrimitiveSignalEncoding},
         make_config_ref,
         signal::Signal,
         stream::Stream,
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
-        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding,
+        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding, message::MessageUsage,
     },
-    errors,
+    errors::{self, ConfigError},
 };
 
 use super::{
-    make_builder_ref, message_builder::MessageIdTemplate, BuilderRef, EnumBuilder, MessageBuilder,
-    MessageFormat, NodeBuilder, StructBuilder, TypeBuilder,
+    bus::BusBuilder,
+    make_builder_ref,
+    message_builder::MessageIdTemplate,
+    BuilderRef, EnumBuilder, MessageBuilder, MessageFormat, NodeBuilder, StructBuilder,
+    TypeBuilder,
 };
 
 #[derive(Debug, Clone)]
@@ -33,6 +39,7 @@ pub struct NetworkData {
     pub get_resp_message: OnceCell<MessageBuilder>,
     pub set_req_message: OnceCell<MessageBuilder>,
     pub set_resp_message: OnceCell<MessageBuilder>,
+    pub buses: BuilderRef<Vec<BusBuilder>>,
 }
 
 impl NetworkBuilder {
@@ -46,6 +53,7 @@ impl NetworkBuilder {
             get_resp_message: OnceCell::new(),
             set_req_message: OnceCell::new(),
             set_resp_message: OnceCell::new(),
+            buses: make_builder_ref(vec![]),
         }));
 
         let client_id_name = "client_id";
@@ -63,7 +71,8 @@ impl NetworkBuilder {
         set_resp_erno.add_entry("Success", Some(0)).unwrap();
         set_resp_erno.add_entry("Error", Some(1)).unwrap();
 
-        let get_req_message = network_builder.create_message("get_req");
+        let get_req_message =
+            network_builder.create_message("get_req", None);
         let get_req_format = get_req_message.make_type_format();
         let get_req_header = network_builder.define_struct("get_req_header");
         get_req_header.add_attribute(oe_index_name, "u13").unwrap();
@@ -77,7 +86,8 @@ impl NetworkBuilder {
             .set(get_req_message)
             .unwrap();
 
-        let get_resp_message = network_builder.create_message("get_resp");
+        let get_resp_message =
+            network_builder.create_message("get_resp", None);
         let get_resp_format = get_resp_message.make_type_format();
         let get_resp_header = network_builder.define_struct("get_resp_header");
         get_resp_header.add_attribute(sof_name, "u1").unwrap();
@@ -95,7 +105,8 @@ impl NetworkBuilder {
             .set(get_resp_message)
             .unwrap();
 
-        let set_req_message = network_builder.create_message("set_req");
+        let set_req_message =
+            network_builder.create_message("set_req", None);
         let set_req_format = set_req_message.make_type_format();
         let set_req_header = network_builder.define_struct("set_req_header");
         set_req_header.add_attribute(sof_name, "u1").unwrap();
@@ -113,7 +124,8 @@ impl NetworkBuilder {
             .set(set_req_message)
             .unwrap();
 
-        let set_resp_message = network_builder.create_message("set_resp");
+        let set_resp_message =
+            network_builder.create_message("set_resp", None);
         let set_resp_format = set_resp_message.make_type_format();
         let set_resp_header = network_builder.define_struct("set_resp_header");
         set_resp_header.add_attribute(client_id_name, "u8").unwrap();
@@ -135,14 +147,29 @@ impl NetworkBuilder {
 
         network_builder
     }
+    pub fn create_bus(&self, name: &str) -> BusBuilder {
+        let network_data = self.0.borrow_mut();
+        let id = network_data.buses.borrow().len();
+        let bus = BusBuilder::new(name, id as u32);
+        network_data.buses.borrow_mut().push(bus.clone());
+        bus
+    }
     pub fn set_baudrate(&self, baudrate: u32) {
         let mut network_data = self.0.borrow_mut();
         network_data.baudrate = Some(baudrate);
     }
 
-    pub fn create_message(&self, name: &str) -> MessageBuilder {
+    pub fn create_message(
+        &self,
+        name: &str,
+        expected_interval: Option<Duration>,
+    ) -> MessageBuilder {
         let network_data = self.0.borrow();
-        let message_builder = MessageBuilder::new(name, &self);
+        let message_builder = MessageBuilder::new(
+            name,
+            &self,
+            expected_interval
+        );
         network_data
             .messages
             .borrow_mut()
@@ -530,105 +557,10 @@ impl NetworkBuilder {
             .collect())
     }
 
-    fn resolve_ids(messages: &mut Vec<MessageBuilder>) -> errors::Result<()> {
-        for i in 0..messages.len() {
-            let mut message_data = messages[i].0.borrow_mut();
-            match &message_data.id {
-                MessageIdTemplate::StdId(_) => (),
-                MessageIdTemplate::ExtId(_) => (),
-                MessageIdTemplate::AnyStd(priority) => {
-                    let mut id = priority.min_id();
-                    loop {
-                        for j in 0..messages.len() {
-                            if i == j {
-                                continue;
-                            }
-                            let other = messages[j].0.borrow();
-                            match other.id {
-                                MessageIdTemplate::StdId(other_id) if other_id == id => {
-                                    id += 1;
-                                    continue;
-                                }
-                                _ => (),
-                            }
-                        }
-                        if id > 2047 {
-                            return Err(errors::ConfigError::FailedToResolveId);
-                        }
-                        break;
-                    }
-                    message_data.id = MessageIdTemplate::StdId(id);
-                }
-                MessageIdTemplate::AnyExt(priority) => {
-                    let mut id = priority.min_id();
-                    loop {
-                        for j in 0..messages.len() {
-                            if i == j {
-                                continue;
-                            }
-                            let other = messages[j].0.borrow();
-                            match other.id {
-                                MessageIdTemplate::ExtId(other_id) if other_id == id => {
-                                    id += 1;
-                                    continue;
-                                }
-                                _ => (),
-                            }
-                        }
-                        if id > 536870911 {
-                            return Err(errors::ConfigError::FailedToResolveId);
-                        }
-                        break;
-                    }
-                    message_data.id = MessageIdTemplate::ExtId(id);
-                }
-                MessageIdTemplate::AnyAny(priority) => {
-                    let mut id = priority.min_id();
-                    let m_id: MessageIdTemplate;
-                    loop {
-                        for j in 0..messages.len() {
-                            if i == j {
-                                continue;
-                            }
-                            let other = messages[j].0.borrow();
-                            match other.id {
-                                MessageIdTemplate::StdId(other_id) if other_id == id => {
-                                    id += 1;
-                                    continue;
-                                }
-                                _ => (),
-                            }
-                        }
-                        if id > 2047 {
-                            loop {
-                                for j in 0..messages.len() {
-                                    if i == j {
-                                        continue;
-                                    }
-                                    let other = messages[j].0.borrow();
-                                    match other.id {
-                                        MessageIdTemplate::ExtId(other_id) if other_id == id => {
-                                            id += 1;
-                                            continue;
-                                        }
-                                        _ => (),
-                                    }
-                                }
-                                if id > 536870911 {
-                                    return Err(errors::ConfigError::FailedToResolveId);
-                                }
-                                m_id = MessageIdTemplate::ExtId(id);
-                                break;
-                            }
-                        } else {
-                            m_id = MessageIdTemplate::StdId(id);
-                        }
-                        break;
-                    }
-                    message_data.id = m_id;
-                }
-            }
-        }
+    fn resolve_ids_filters_and_buses(messages: &Vec<MessageBuilder>) -> errors::Result<()> {
+        // for message in messages {
+        // let message_data = message.0.borrow_mut();
+        // }
 
         Ok(())
     }
@@ -636,6 +568,20 @@ impl NetworkBuilder {
     pub fn build(self) -> errors::Result<NetworkRef> {
         let builder = self.0.borrow();
         let baudrate = builder.baudrate.unwrap_or(1000000);
+
+        // create busses!
+        if builder.buses.borrow().is_empty() {
+            return errors::Result::Err(ConfigError::NoBusAvaiable);
+        }
+        let buses: Vec<BusRef> = builder
+            .buses
+            .borrow()
+            .iter()
+            .map(|bus_builder| {
+                let bus_data = bus_builder.0.borrow();
+                make_config_ref(config::bus::Bus::new(bus_data.id, bus_data.baudrate))
+            })
+            .collect();
 
         // sort types in topological order!
         let type_builders = Self::topo_sort_type_builders(&builder.types.borrow())?;
@@ -697,7 +643,7 @@ impl NetworkBuilder {
         }
 
         // resolve any ids.
-        Self::resolve_ids(&mut builder.messages.borrow_mut())?;
+        Self::resolve_ids_filters_and_buses(&mut builder.messages.borrow_mut())?;
 
         let mut messages = vec![];
         for message_builder in builder.messages.borrow().iter() {
@@ -754,7 +700,7 @@ impl NetworkBuilder {
                                 ))
                             }
                             Type::Struct {
-                                name : struct_name,
+                                name: struct_name,
                                 description: _,
                                 attribs,
                                 visibility: _,
@@ -776,7 +722,7 @@ impl NetworkBuilder {
                                 ))
                             }
                             Type::Enum {
-                                name : enum_name, 
+                                name: enum_name,
                                 description: _,
                                 size: _,
                                 entries,
@@ -826,6 +772,12 @@ impl NetworkBuilder {
             }
             let dlc = ((max_bit + 8 - 1) / 8) as u8;
 
+            let bus = buses
+                .iter()
+                .find(|bus| bus.id() == message_data.bus.clone().unwrap().0.borrow().id)
+                .unwrap()
+                .clone();
+
             messages.push(make_config_ref(Message::new(
                 message_data.name.clone(),
                 message_data.description.clone(),
@@ -834,6 +786,7 @@ impl NetworkBuilder {
                 signals,
                 message_data.visibility.clone(),
                 dlc,
+                bus,
             )));
         }
         let get_resp_message = messages
@@ -841,21 +794,25 @@ impl NetworkBuilder {
             .find(|m| m.name() == builder.get_resp_message.get().unwrap().0.borrow().name)
             .unwrap()
             .clone();
+        get_resp_message.__set_usage(MessageUsage::GetResp);
         let get_req_message = messages
             .iter()
             .find(|m| m.name() == builder.get_req_message.get().unwrap().0.borrow().name)
             .unwrap()
             .clone();
+        get_req_message.__set_usage(MessageUsage::GetReq);
         let set_resp_message = messages
             .iter()
             .find(|m| m.name() == builder.set_resp_message.get().unwrap().0.borrow().name)
             .unwrap()
             .clone();
+        set_resp_message.__set_usage(MessageUsage::SetResp);
         let set_req_message = messages
             .iter()
             .find(|m| m.name() == builder.set_req_message.get().unwrap().0.borrow().name)
             .unwrap()
             .clone();
+        set_req_message.__set_usage(MessageUsage::SetReq);
 
         pub fn rec_type_acc(node_types: &mut Vec<TypeRef>, encoding: &TypeSignalEncoding) {
             match encoding {
@@ -949,13 +906,18 @@ impl NetworkBuilder {
                     .find(|m| m.name() == command_data.resp_message.0.borrow().name)
                     .expect("invalid command builder rx_message wasn't added to the network")
                     .clone();
-                commands.push(make_config_ref(Command::new(
+                let command_ref = make_config_ref(Command::new(
                     command_data.name.clone(),
                     command_data.description.clone(),
-                    tx_message,
-                    rx_message,
+                    tx_message.clone(),
+                    rx_message.clone(),
                     command_data.visibility.clone(),
-                )));
+                ));
+                rx_message.__set_usage(MessageUsage::CommandResp(command_ref.clone()));
+                tx_message.__set_usage(MessageUsage::CommandReq(command_ref.clone()));
+
+                commands.push(command_ref);
+
             }
 
             let mut object_entries = vec![];
@@ -963,10 +925,15 @@ impl NetworkBuilder {
             for object_entry_builder in &node_builder.0.borrow().object_entries {
                 let object_entry_data = object_entry_builder.0.borrow();
                 let ty = Self::resolve_type(&mut types, &object_entry_data.ty)?;
-                fn rec_add_type(node_types : &mut Vec<TypeRef>, ty : &TypeRef) {
+                fn rec_add_type(node_types: &mut Vec<TypeRef>, ty: &TypeRef) {
                     match ty as &Type {
                         Type::Primitive(_) => (),
-                        Type::Struct { name : _, description : _, attribs , visibility : _ } => {
+                        Type::Struct {
+                            name: _,
+                            description: _,
+                            attribs,
+                            visibility: _,
+                        } => {
                             if !node_types.contains(ty) {
                                 node_types.push(ty.clone());
                             }
@@ -974,12 +941,18 @@ impl NetworkBuilder {
                                 rec_add_type(node_types, attrib_ty);
                             }
                         }
-                        Type::Enum { name : _, description : _, size : _ , entries : _, visibility : _ } => {
+                        Type::Enum {
+                            name: _,
+                            description: _,
+                            size: _,
+                            entries: _,
+                            visibility: _,
+                        } => {
                             if !node_types.contains(ty) {
                                 node_types.push(ty.clone());
                             }
                         }
-                        Type::Array { len : _, ty : _ } => todo!(),
+                        Type::Array { len: _, ty: _ } => todo!(),
                     };
                 }
                 rec_add_type(&mut node_types, &ty);
@@ -1017,16 +990,30 @@ impl NetworkBuilder {
                     mappings.push(Some(oe));
                 }
 
-                tx_streams.push(make_config_ref(Stream::new(
+                let stream_ref = make_config_ref(Stream::new(
                     stream_data.name.clone(),
                     stream_data.description.clone(),
                     mappings,
-                    message,
+                    message.clone(),
                     stream_data.visbility.clone(),
-                )));
+                ));
+                message.__set_usage(MessageUsage::Stream(stream_ref.clone()));
+                tx_streams.push(stream_ref);
             }
 
             let node_types = Self::topo_sort_types(&node_types);
+
+            let buses = node_data
+                .buses
+                .iter()
+                .map(|bus_builder| {
+                    buses
+                        .iter()
+                        .find(|bus| bus.id() == bus_builder.0.borrow().id)
+                        .unwrap()
+                        .clone()
+                })
+                .collect();
 
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
@@ -1040,6 +1027,7 @@ impl NetworkBuilder {
                 rx_messages,
                 tx_messages,
                 object_entries,
+                buses,
             )));
         }
 
@@ -1149,6 +1137,16 @@ impl NetworkBuilder {
             }
         }
 
+        // set usage for all messages!
+        for message in &messages {
+            let once_cell = message.__get_usage();
+            if once_cell.get().is_none() {
+                let expected = builder.messages.borrow().iter().find(|m| &m.0.borrow().name == message.name()).unwrap()
+                    .0.borrow().expected_interval.clone().unwrap_or(Duration::from_secs(60));
+                once_cell.set(MessageUsage::External { interval: expected }).unwrap();
+            }
+        }
+
         Ok(make_config_ref(Network::new(
             baudrate,
             chrono::Local::now(),
@@ -1159,6 +1157,7 @@ impl NetworkBuilder {
             get_resp_message,
             set_req_message,
             set_resp_message,
+            buses,
         )))
     }
 }

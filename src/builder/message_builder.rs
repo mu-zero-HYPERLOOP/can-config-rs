@@ -1,7 +1,11 @@
-use crate::{errors, config::{signal::Signal, Visibility}};
+use std::time::Duration;
 
-use super::{make_builder_ref, BuilderRef, NetworkBuilder, NodeBuilder};
+use crate::{
+    config::{signal::Signal, Visibility},
+    errors,
+};
 
+use super::{bus::BusBuilder, make_builder_ref, BuilderRef, NetworkBuilder, NodeBuilder, stream_builder::StreamBuilder, CommandBuilder};
 
 #[derive(Debug)]
 pub enum MessagePriority {
@@ -12,6 +16,18 @@ pub enum MessagePriority {
     Low,
     SuperLow,
 }
+
+// #[derive(Debug, Clone)]
+// pub enum MessageBuilderUsage {
+//     Stream(StreamBuilder),
+//     CommandReq(CommandBuilder),
+//     CommandResp(CommandBuilder),
+//     GetResp,
+//     GetReq,
+//     SetResp,
+//     SetReq,
+//     External{interval : Duration},
+// }
 
 #[derive(Debug)]
 pub enum MessageIdTemplate {
@@ -32,7 +48,12 @@ pub struct MessageData {
     pub id: MessageIdTemplate,
     pub format: MessageFormat,
     pub network_builder: NetworkBuilder,
+    pub receivers : Vec<NodeBuilder>,
+    pub transmitters : Vec<NodeBuilder>,
     pub visibility: Visibility,
+    pub bus: Option<BusBuilder>,
+    pub expected_interval : Option<Duration>,
+    // pub usage : MessageBuilderUsage,
 }
 
 #[derive(Debug)]
@@ -51,7 +72,6 @@ pub struct MessageTypeFormatBuilder(pub BuilderRef<MessageTypeFormatData>);
 #[derive(Debug)]
 pub struct MessageTypeFormatData(pub Vec<(String, String)>);
 
-
 impl MessagePriority {
     pub fn min_id(&self) -> u32 {
         match &self {
@@ -66,7 +86,7 @@ impl MessagePriority {
 }
 
 impl MessageBuilder {
-    pub fn new(name: &str, network_builder: &NetworkBuilder) -> MessageBuilder {
+    pub fn new(name: &str, network_builder: &NetworkBuilder, expected_interval : Option<Duration>) -> MessageBuilder {
         MessageBuilder(make_builder_ref(MessageData {
             name: name.to_owned(),
             description: None,
@@ -74,7 +94,40 @@ impl MessageBuilder {
             format: MessageFormat::Empty,
             network_builder: network_builder.clone(),
             visibility: Visibility::Global,
+            bus: None,
+            receivers : vec![],
+            transmitters : vec![],
+            expected_interval,
+            // usage,
         }))
+    }
+    pub fn assign_bus(&self, bus_name: &str) -> BusBuilder {
+        let mut message_data = self.0.borrow_mut();
+        if message_data.bus.is_some() {
+            println!("WARNING: reassiged bus of message : {}
+                     but messages can only be assigned to one bus,
+                     if splitting is required it is done automatically by 
+                     the id, filter and load balancing code!", message_data.name);
+        }
+        let network_data = message_data.network_builder.0.borrow_mut();
+        let bus = network_data
+            .buses
+            .borrow()
+            .iter()
+            .find(|bus| &bus.0.borrow().name == bus_name)
+            .cloned();
+        drop(network_data);
+        match bus {
+            Some(bus) => {
+                message_data.bus = Some(bus.clone());
+                bus
+            }
+            None => {
+                let bus = message_data.network_builder.create_bus(bus_name);
+                message_data.bus = Some(bus.clone());
+                bus
+            }
+        }
     }
     pub fn hide(&self) {
         let mut message_data = self.0.borrow_mut();
@@ -112,7 +165,7 @@ impl MessageBuilder {
         let mut message_data = self.0.borrow_mut();
         message_data.description = Some(name.to_owned());
     }
-    pub fn add_transmitter(&self, name: &str) {
+    pub fn add_transmitter(&self, node_name: &str) {
         // check if node with {name} exists.
         let message_data = self.0.borrow();
         let mut node_named: Option<NodeBuilder> = None;
@@ -124,15 +177,17 @@ impl MessageBuilder {
             .borrow()
             .iter()
         {
-            if node.0.borrow().name == name {
+            if node.0.borrow().name == node_name {
                 node_named = Some(node.clone());
             }
         }
         let node = match node_named {
             Some(node) => node,
-            None => message_data.network_builder.create_node(name),
+            None => message_data.network_builder.create_node(node_name),
         };
-        node.add_tx_message(&self);
+        node.0.borrow_mut().tx_messages.push(self.clone());
+        drop(message_data);
+        self.0.borrow_mut().transmitters.push(node);
     }
     pub fn add_receiver(&self, name: &str) {
         // check if node with {name} exists.
@@ -154,7 +209,9 @@ impl MessageBuilder {
             Some(node) => node,
             None => message_data.network_builder.create_node(name),
         };
-        node.add_rx_message(&self);
+        node.0.borrow_mut().rx_messages.push(self.clone());
+        drop(message_data);
+        self.0.borrow_mut().receivers.push(node);
     }
 }
 

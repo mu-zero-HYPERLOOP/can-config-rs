@@ -33,6 +33,7 @@ pub mod signal;
 pub mod stream;
 pub mod types;
 pub mod visibility;
+pub mod bus;
 
 pub type ConfigRef<T> = Arc<T>;
 

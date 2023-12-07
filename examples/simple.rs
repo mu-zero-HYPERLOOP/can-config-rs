@@ -1,10 +1,11 @@
-use can_config_rs::config::types;
 
 extern crate can_config_rs;
 
 
 fn main() {
     let network_builder = can_config_rs::builder::NetworkBuilder::new();
+    let bus = network_builder.create_bus("100");
+    bus.baudrate(1000000);
     network_builder.create_node("secu");
 
     let network_config = network_builder.build().unwrap();

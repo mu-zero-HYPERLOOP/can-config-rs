@@ -11,5 +11,6 @@ pub enum ConfigError {
     UndefinedType(String),
     InvalidDecimalDefinition(String),
     FailedToResolveId,
+    NoBusAvaiable,
 }
 

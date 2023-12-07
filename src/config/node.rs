@@ -1,4 +1,4 @@
-use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, ObjectEntryRef, Message};
+use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, ObjectEntryRef, Message, bus::{Bus, BusRef}};
 
 
 pub type NodeRef = ConfigRef<Node>;
@@ -22,6 +22,7 @@ pub struct Node {
     tx_messages: Vec<MessageRef>,
 
     object_entries: Vec<ObjectEntryRef>,
+    buses : Vec<BusRef>,
 }
 
 impl Node {
@@ -33,7 +34,8 @@ impl Node {
                rx_streams : Vec<StreamRef>,
                rx_messages : Vec<MessageRef>,
                tx_messages : Vec<MessageRef>,
-               object_entries : Vec<ObjectEntryRef>)-> Self{
+               object_entries : Vec<ObjectEntryRef>,
+               buses : Vec<BusRef>)-> Self{
         Self {
             name,
             description,
@@ -46,6 +48,7 @@ impl Node {
             rx_messages,
             tx_messages,
             object_entries,
+            buses,
         }
     }
 
@@ -91,5 +94,8 @@ impl Node {
     }
     pub fn id(&self) -> u16 {
         self.id
+    }
+    pub fn buses(&self) -> &Vec<BusRef> {
+        &self.buses
     }
 }
