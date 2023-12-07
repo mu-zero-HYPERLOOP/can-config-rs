@@ -38,15 +38,17 @@ impl StreamBuilder {
         message.set_any_std_id(MessagePriority::Normal);
         let format = message.make_type_format();
 
-        StreamBuilder(make_builder_ref(StreamData {
+        let new = StreamBuilder(make_builder_ref(StreamData {
             name: name.to_owned(),
             description: None,
-            message,
+            message : message.clone(),
             format,
             tx_node: node_builder,
             object_entries: vec![],
             visbility: Visibility::Global,
-        }))
+        }));
+        message.__assign_to_stream(&new);
+        new
     }
     pub fn hide(&self) {
         let mut stream_data = self.0.borrow_mut();

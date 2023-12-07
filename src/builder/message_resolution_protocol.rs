@@ -1,9 +1,14 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    time::Duration, cmp::Ordering,
 };
 
-use crate::errors;
+use crate::{
+    builder::{message_builder::MessageBuilderUsage, MessagePriority},
+    config::{Type, TypeRef},
+    errors,
+};
 
 use super::{bus::BusBuilder, MessageBuilder};
 
@@ -128,33 +133,52 @@ impl SetKey {
         }
     }
 
-    fn combine(a: &SetKey, b: &SetKey, options: &CombineOptions) -> Option<SetKey> {
+    fn combine(a: &SetKey, b: &SetKey, options: &CombineOptions) -> Option<SetMerge> {
         if a.receiver_set != b.receiver_set {
             return None; // 2 sets can't be merged if their receive set is different
         }
+        let mut assign_bus = None;
+        let mut assign_std = false;
+        let mut assign_ext = false;
+        let mut assign_suffix = false;
         let type_assignment = match a.type_assignment {
             TypeAssignment::Std => {
                 match b.type_assignment {
                     TypeAssignment::Std => TypeAssignment::Std,
                     TypeAssignment::Ext => return None, //can't merge sets of differnt types
-                    TypeAssignment::Any => TypeAssignment::Std,
+                    TypeAssignment::Any => {
+                        assign_std = true;
+                        TypeAssignment::Std
+                    }
                 }
             }
             TypeAssignment::Ext => {
                 match b.type_assignment {
                     TypeAssignment::Std => return None, //can't merge sets of differnt types
                     TypeAssignment::Ext => TypeAssignment::Ext,
-                    TypeAssignment::Any if options.allow_ext => TypeAssignment::Ext,
+                    TypeAssignment::Any if options.allow_ext => {
+                        assign_ext = true;
+                        TypeAssignment::Ext
+                    }
                     TypeAssignment::Any => return None, // dont allow ext
                 }
             }
             TypeAssignment::Any => {
                 match b.type_assignment {
-                    TypeAssignment::Std => TypeAssignment::Std,
-                    TypeAssignment::Ext if options.allow_ext => TypeAssignment::Ext,
+                    TypeAssignment::Std => {
+                        assign_std = true;
+                        TypeAssignment::Std
+                    }
+                    TypeAssignment::Ext if options.allow_ext => {
+                        assign_ext = true;
+                        TypeAssignment::Ext
+                    }
                     TypeAssignment::Ext => return None, //dont allow ext
                     TypeAssignment::Any if options.allow_ext => TypeAssignment::Any,
-                    TypeAssignment::Any => TypeAssignment::Std, //prefer std if ext is not allowed
+                    TypeAssignment::Any => {
+                        assign_std = true;
+                        TypeAssignment::Std //prefer std if ext is not allowed
+                    }
                 }
             }
         };
@@ -166,11 +190,17 @@ impl SetKey {
                         BusAssignment::Bus { id: a_bus_id }
                     }
                     BusAssignment::Bus { id: _ } => return None, // different buses
-                    BusAssignment::Any => BusAssignment::Bus { id: a_bus_id },
+                    BusAssignment::Any => {
+                        assign_bus = Some((a_bus_id, true));
+                        BusAssignment::Bus { id: a_bus_id }
+                    }
                 }
             }
             BusAssignment::Any => match b.bus_assignment {
-                BusAssignment::Bus { id: b_bus_id } => BusAssignment::Bus { id: b_bus_id },
+                BusAssignment::Bus { id: b_bus_id } => {
+                    assign_bus = Some((b_bus_id, false));
+                    BusAssignment::Bus { id: b_bus_id }
+                }
                 BusAssignment::Any => BusAssignment::Any,
             },
         };
@@ -188,7 +218,7 @@ impl SetKey {
                             }
                             TypeAssignment::Ext => {
                                 (0xFFFFFFFF as u32)
-                                    .overflowing_shl(29 - options.std_suffix_len)
+                                    .overflowing_shl(29 - options.ext_suffix_len)
                                     .0
                             }
                             TypeAssignment::Any => {
@@ -203,37 +233,50 @@ impl SetKey {
                             return None;
                         }
                     }
-                    SuffixAssignment::None => SuffixAssignment::Suffix { value: suffix_a },
+                    SuffixAssignment::None => {
+                        assign_suffix = true;
+                        SuffixAssignment::Suffix { value: suffix_a }
+                    }
                 }
             }
             SuffixAssignment::None => match b.suffix_assignment {
                 SuffixAssignment::Suffix { value: suffix_b } => {
+                    assign_suffix = true;
                     SuffixAssignment::Suffix { value: suffix_b }
                 }
                 SuffixAssignment::None => SuffixAssignment::None,
             },
         };
 
-        Some(SetKey {
-            receiver_set: a.receiver_set.clone(),
-            bus_assignment,
-            suffix_assignment,
-            type_assignment,
+        Some(SetMerge {
+            new_key: SetKey {
+                receiver_set: a.receiver_set.clone(),
+                bus_assignment,
+                suffix_assignment,
+                type_assignment,
+            },
+            assign_bus,
+            assign_suffix,
+            assign_std,
+            assign_ext,
         })
     }
 }
 
+#[derive(Debug, Clone)]
 struct SetMerge {
     new_key: SetKey,
-    assign_bus: Option<u32>,
+    assign_bus: Option<(u32, bool)>,
     assign_std: bool,
     assign_ext: bool,
+    assign_suffix: bool,
 }
 
 #[derive(Clone)]
 struct MessageSet {
     key: SetKey,
     messages: Vec<MessageBuilder>,
+    bus_load: f64,
 }
 
 impl std::fmt::Debug for MessageSet {
@@ -247,10 +290,90 @@ impl MessageSet {
         Self {
             key,
             messages: vec![],
+            bus_load: 0.0,
         }
     }
-    pub fn add_message(&mut self, message: &MessageBuilder) {
-        assert_eq!(SetKey::new(message), self.key);
+    pub fn add_message(&mut self, message: &MessageBuilder, types: &Vec<TypeRef>) {
+        // assert_eq!(SetKey::new(message), self.key);
+        let std = match message.0.borrow().id {
+            crate::builder::message_builder::MessageIdTemplate::StdId(_) => true,
+            crate::builder::message_builder::MessageIdTemplate::ExtId(_) => false,
+            crate::builder::message_builder::MessageIdTemplate::AnyStd(_) => true,
+            crate::builder::message_builder::MessageIdTemplate::AnyExt(_) => false,
+            crate::builder::message_builder::MessageIdTemplate::AnyAny(_) => false, // worst case!
+        };
+        // calc dlc!
+        let dlc: usize = match &message.0.borrow().format {
+            crate::builder::MessageFormat::Signals(signal_format) => signal_format
+                .0
+                .borrow()
+                .0
+                .iter()
+                .map(|s| s.byte_offset() + s.size() as usize)
+                .max()
+                .unwrap_or(0)
+                .into(),
+            crate::builder::MessageFormat::Types(type_format) => {
+                let mut acc: usize = 0;
+                fn acc_dlc(ty: &Type) -> usize {
+                    match ty {
+                        Type::Primitive(signal_type) => signal_type.size() as usize,
+                        Type::Struct {
+                            name: _,
+                            description: _,
+                            attribs,
+                            visibility: _,
+                        } => {
+                            let mut acc: usize = 0;
+                            for (_, ty) in attribs {
+                                acc += acc_dlc(ty as &Type);
+                            }
+                            acc
+                        }
+                        Type::Enum {
+                            name: _,
+                            description: _,
+                            size,
+                            entries: _,
+                            visibility: _,
+                        } => *size as usize,
+                        Type::Array { len: _, ty: _ } => todo!(),
+                    }
+                }
+                for (type_name, _) in &type_format.0.borrow().0 {
+                    let ty = types.iter().find(|ty| &ty.name() == type_name);
+                    match ty {
+                        Some(ty) => acc += acc_dlc(ty as &Type),
+                        None => {
+                            println!("FIXME Please : can-config-rs : message_resolution_prototocol")
+                        }
+                    };
+                }
+                acc
+            }
+            crate::builder::MessageFormat::Empty => 0,
+        };
+
+        let bus_frame_load = if std {
+            8 * dlc + 44 + (34 + 8 * dlc - 1) / 4
+        } else {
+            8 * dlc + 64 + (54 + 8 * dlc - 1) / 4
+        };
+        let interval = match &message.0.borrow().usage {
+            MessageBuilderUsage::Stream(stream) => {
+                //TODO actually get the correct interval
+                Duration::from_millis(10)
+            }
+            MessageBuilderUsage::CommandReq(command) => Duration::from_millis(100),
+            MessageBuilderUsage::CommandResp(command) => Duration::from_millis(100),
+            MessageBuilderUsage::Configuration => Duration::from_secs(1),
+            MessageBuilderUsage::External { interval } => {
+                interval.unwrap_or(Duration::from_secs(60))
+            }
+        };
+        let bus_load = bus_frame_load as f64 / interval.as_secs() as f64;
+        self.bus_load += bus_load;
+
         self.messages.push(message.clone());
     }
 }
@@ -270,87 +393,617 @@ impl MessageSetSet {
             sets: HashMap::new(),
         }
     }
-    pub fn insert(&mut self, message: &MessageBuilder) {
+    pub fn insert(&mut self, message: &MessageBuilder, types: &Vec<TypeRef>) {
         let key = SetKey::new(message);
         let set = self.sets.get_mut(&key);
         match set {
             Some(set) => {
-                set.add_message(message);
+                set.add_message(message, types);
             }
             None => {
                 let mut set = MessageSet::new(key.clone());
-                set.add_message(message);
+                set.add_message(message, types);
                 self.sets.insert(key, set);
             }
         }
     }
 
-    pub fn merge_sets(&mut self) {
+    pub fn merge_sets(&mut self, buses: &Vec<BusBuilder>, options: &CombineOptions) -> bool {
+        self.display_info(buses);
+
         let sets: Vec<MessageSet> = self.sets.values().map(|s| s.clone()).collect();
-        let mut ext_set_count = 0;
-        let mut std_set_count = 0;
+
+        let mut bus_cap: Vec<f64> = buses
+            .iter()
+            .map(|bus| bus.0.borrow().baudrate as f64)
+            .collect();
         let set_count = self.sets.len();
         for (key, set) in &self.sets {
-            match key.type_assignment {
-                TypeAssignment::Std => std_set_count += 1,
-                TypeAssignment::Ext => ext_set_count += 1,
-                TypeAssignment::Any => (),
+            match key.bus_assignment {
+                BusAssignment::Bus { id } => bus_cap[id as usize] -= set.bus_load,
+                BusAssignment::Any => (),
             }
         }
-        let ext_suffix_len = (std_set_count as f64).log2().ceil() as u32;
-        let std_suffix_len = (ext_set_count as f64).log2().ceil() as u32;
 
         // suffix collisions!
 
-        let options = CombineOptions {
-            allow_ext: false,
-            std_suffix_len,
-            ext_suffix_len,
-        };
-
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         struct Merge {
-            key: SetKey,
             i: usize,
             j: usize,
+            merge_info: SetMerge,
         }
 
-        let mut possible_merges: Vec<Merge> = vec![];
+        let mut best_score = 0;
+        let mut best_merge: Option<Merge> = None;
 
         for i in 0..set_count {
             for j in 0..set_count {
                 if i == j {
                     continue;
                 }
-                let combination = SetKey::combine(&sets[i].key, &sets[j].key, &options);
-                match combination {
-                    Some(key) => possible_merges.push(Merge { key, i, j }),
+                let set_merge = SetKey::combine(&sets[i].key, &sets[j].key, &options);
+                match set_merge {
+                    Some(set_merge) => {
+                        // evaulate !
+                        let mut score = 0;
+                        score += match &set_merge.assign_bus {
+                            Some((assigned_bus, to_a)) => {
+                                let additional_load = if *to_a {
+                                    sets[j].bus_load
+                                } else {
+                                    sets[i].bus_load
+                                };
+                                if bus_cap[*assigned_bus as usize] < additional_load {
+                                    // doesn't fit on the bus
+                                    -1000
+                                } else {
+                                    let my_cap = bus_cap[*assigned_bus as usize];
+                                    // * 3 / 2 to prefer this merges over any merges!
+                                    let mut nicenes: u32 = bus_cap.len() as u32 * 3 / 2;
+                                    for bus in &bus_cap {
+                                        if *bus > my_cap {
+                                            nicenes -= 1;
+                                        }
+                                    }
+                                    nicenes as i32
+                                }
+                            }
+                            None => {
+                                let mut best_bus = 0;
+                                let mut highest_cap = 0.0;
+                                for i in 0..bus_cap.len() {
+                                    if bus_cap[i] > highest_cap {
+                                        highest_cap = bus_cap[i];
+                                        best_bus = i;
+                                    }
+                                }
+                                if bus_cap[best_bus] < sets[i].bus_load + sets[j].bus_load {
+                                    panic!("it's impossible to find a bus balancing solution, try reducing the amount of messages");
+                                };
+                                bus_cap.len() as i32
+                            }
+                        };
+
+                        if set_merge.assign_std {
+                            score += (bus_cap.len() * 2) as i32;
+                        }
+                        if set_merge.assign_ext {
+                            score += 0;
+                        }
+                        if set_merge.assign_suffix {
+                            score += (bus_cap.len() / 2 + 1) as i32;
+                        }
+
+                        if score > best_score {
+                            best_merge = Some(Merge {
+                                i,
+                                j,
+                                merge_info: set_merge.clone(),
+                            });
+                            best_score = score;
+                        }
+                    }
                     None => (),
                 }
             }
         }
+        let Some(best_merge) = best_merge else {
+            return false;
+        };
+        // apply merge!
+        let key_a = &sets[best_merge.i].key;
+        let mut set_a = self.sets.remove(&key_a).unwrap();
+        let key_b = &sets[best_merge.j].key;
+        let mut set_b = self.sets.remove(&key_b).unwrap();
 
-        // evaulate the possible merges based on!
-        println!("merges = {possible_merges:?}");
+        set_a.messages.append(&mut set_b.messages);
+        let new_set = MessageSet {
+            bus_load: set_a.bus_load + set_b.bus_load,
+            key: best_merge.merge_info.new_key,
+            messages: set_a.messages,
+        };
+        self.sets.insert(new_set.key.clone(), new_set);
+
+        return true;
+    }
+
+    pub fn split_sets(
+        &mut self,
+        buses: &Vec<BusBuilder>,
+        types: &Vec<TypeRef>,
+        options: &CombineOptions,
+    ) -> bool {
+        let mut sets: HashMap<SetKey, MessageSet> = HashMap::new();
+        let mut did_split = false;
+
+        for (key, set) in &self.sets {
+            match key.suffix_assignment {
+                SuffixAssignment::Suffix { value: _ } => {
+                    if set.messages.len() >= 127 {
+                        did_split = true;
+                        // Find all messages with assigned suffixes and collect them!
+                        // Where does this suffix actually come from!
+
+                        // compare suffixes for the len
+                        let suffix_mask = match set.key.type_assignment {
+                            TypeAssignment::Std => {
+                                (0xFFFFFFFF as u32)
+                                    .overflowing_shl(11 - options.std_suffix_len)
+                                    .0
+                            }
+                            TypeAssignment::Ext => {
+                                (0xFFFFFFFF as u32)
+                                    .overflowing_shl(29 - options.ext_suffix_len)
+                                    .0
+                            }
+                            TypeAssignment::Any => {
+                                panic!("if a suffix is specified the frame must have a type")
+                            }
+                        };
+                        let mut set_a = MessageSet {
+                            bus_load: 0.0,
+                            key: key.clone(),
+                            messages: vec![],
+                        };
+                        let mut set_b = MessageSet {
+                            bus_load: 0.0,
+                            key: SetKey {
+                                bus_assignment: key.bus_assignment.clone(),
+                                receiver_set: key.receiver_set.clone(),
+                                suffix_assignment: SuffixAssignment::None,
+                                type_assignment: key.type_assignment.clone(),
+                            },
+                            messages: vec![],
+                        };
+                        // TODO implement priority based split
+
+                        for msg in &set.messages {
+                            let has_suffix = match &msg.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => true,
+                                super::message_builder::MessageIdTemplate::ExtId(_) => true,
+                                _ => false,
+                            };
+                            if has_suffix {
+                                set_a.add_message(msg, types);
+                            } else {
+                                if set_a.messages.len() > set_b.messages.len() {
+                                    set_b.add_message(msg, types);
+                                } else {
+                                    set_a.add_message(msg, types);
+                                }
+                            }
+                        }
+                        sets.insert(set_a.key.clone(), set_a);
+                        sets.insert(set_b.key.clone(), set_b);
+                    } else {
+                        // keep the set exactly the same!
+                        // Alternativly we could check if the priority ordering is correct
+                        // otherwise and allow us to split the set!
+                        sets.insert(key.clone(), set.clone());
+                    }
+                }
+                SuffixAssignment::None => {
+                    // assign a new setcode! (key)
+                    let key = key;
+                    if set.messages.len() >= 127 {
+                        did_split = true;
+                        // split set into 2 sets with around the same priories
+                        let mut set_a = MessageSet {
+                            key: key.clone(),
+                            messages: vec![],
+                            bus_load: 0.0,
+                        };
+                        let mut set_b = MessageSet {
+                            key: key.clone(),
+                            messages: vec![],
+                            bus_load: 0.0,
+                        };
+
+                        let sl_messages: Vec<&MessageBuilder> = set
+                            .messages
+                            .iter()
+                            .filter(|m| match &m.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::ExtId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                                    prio == &MessagePriority::SuperLow
+                                }
+                                super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                                    prio == &MessagePriority::SuperLow
+                                }
+                                super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                                    prio == &MessagePriority::SuperLow
+                                }
+                            })
+                            .collect();
+
+                        for msg in &sl_messages[0..sl_messages.len() / 2] {
+                            set_a.add_message(msg, types);
+                        }
+                        for msg in &sl_messages[sl_messages.len()..] {
+                            set_b.add_message(msg, types);
+                        }
+
+                        let low_messages: Vec<&MessageBuilder> = set
+                            .messages
+                            .iter()
+                            .filter(|m| match &m.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::ExtId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                                    prio == &MessagePriority::Low
+                                }
+                                super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                                    prio == &MessagePriority::Low
+                                }
+                                super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                                    prio == &MessagePriority::Low
+                                }
+                            })
+                            .collect();
+
+                        for msg in &low_messages[0..low_messages.len() / 2] {
+                            set_a.add_message(msg, types);
+                        }
+                        for msg in &sl_messages[sl_messages.len()..] {
+                            set_b.add_message(msg, types);
+                        }
+
+                        let normal_messages: Vec<&MessageBuilder> = set
+                            .messages
+                            .iter()
+                            .filter(|m| match &m.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::ExtId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                                    prio == &MessagePriority::Normal
+                                }
+                                super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                                    prio == &MessagePriority::Normal
+                                }
+                                super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                                    prio == &MessagePriority::Normal
+                                }
+                            })
+                            .collect();
+
+                        for msg in &normal_messages[0..normal_messages.len() / 2] {
+                            set_a.add_message(msg, types);
+                        }
+                        for msg in &sl_messages[sl_messages.len()..] {
+                            set_b.add_message(msg, types);
+                        }
+
+                        let high_messages: Vec<&MessageBuilder> = set
+                            .messages
+                            .iter()
+                            .filter(|m| match &m.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::ExtId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                                    prio == &MessagePriority::High
+                                }
+                                super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                                    prio == &MessagePriority::High
+                                }
+                                super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                                    prio == &MessagePriority::High
+                                }
+                            })
+                            .collect();
+
+                        for msg in &high_messages[0..high_messages.len() / 2] {
+                            set_a.add_message(msg, types);
+                        }
+                        for msg in &sl_messages[sl_messages.len()..] {
+                            set_b.add_message(msg, types);
+                        }
+
+                        let realtime_messages: Vec<&MessageBuilder> = set
+                            .messages
+                            .iter()
+                            .filter(|m| match &m.0.borrow().id {
+                                super::message_builder::MessageIdTemplate::StdId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::ExtId(_) => {
+                                    panic!("We shoudn't be here!")
+                                }
+                                super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                                    prio == &MessagePriority::Realtime
+                                }
+                                super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                                    prio == &MessagePriority::Realtime
+                                }
+                                super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                                    prio == &MessagePriority::Realtime
+                                }
+                            })
+                            .collect();
+
+                        for msg in &realtime_messages[0..realtime_messages.len() / 2] {
+                            set_a.add_message(msg, types);
+                        }
+                        for msg in &sl_messages[sl_messages.len()..] {
+                            set_b.add_message(msg, types);
+                        }
+                        sets.insert(key.clone(), set_a);
+                        sets.insert(key.clone(), set_b);
+                    } else {
+                        sets.insert(key.clone(), set.clone());
+                    }
+                }
+            }
+        }
+        self.sets = sets;
+        return did_split;
+    }
+
+    pub fn fix_sets(&mut self, buses: &Vec<BusBuilder>, options: &CombineOptions) {
+        let mut sets: HashMap<SetKey, MessageSet> = HashMap::new();
+
+        let mut std_setcodes: Vec<u32> = vec![];
+        let mut ext_setcodes: Vec<u32> = vec![];
+
+        for (key, _) in &self.sets {
+            match key.type_assignment {
+                TypeAssignment::Std => match key.suffix_assignment {
+                    SuffixAssignment::Suffix { value } => std_setcodes.push(value),
+                    SuffixAssignment::None => (),
+                },
+                TypeAssignment::Ext => match key.suffix_assignment {
+                    SuffixAssignment::Suffix { value } => ext_setcodes.push(value),
+                    SuffixAssignment::None => (),
+                },
+                TypeAssignment::Any => (),
+            }
+        }
+
+        let mut bus_cap: Vec<f64> = buses
+            .iter()
+            .map(|bus| bus.0.borrow().baudrate as f64)
+            .collect();
+        for (key, set) in &self.sets {
+            match key.bus_assignment {
+                BusAssignment::Bus { id } => bus_cap[id as usize] -= set.bus_load,
+                BusAssignment::Any => (),
+            }
+        }
+        let mut sets_vec : Vec<&MessageSet> = self.sets.iter().map(|(key,set)| set).collect();
+        sets_vec.sort_by(|a,b| {
+            if a.bus_load < b.bus_load {
+                Ordering::Greater
+            }else if a.bus_load > b.bus_load {
+                Ordering::Less
+            }else {
+                Ordering::Equal
+            }
+        });
+
+        for set in sets_vec {
+            let key = &set.key;
+
+            let type_assignment = match key.type_assignment {
+                TypeAssignment::Std => key.type_assignment.clone(),
+                TypeAssignment::Ext => key.type_assignment.clone(),
+                TypeAssignment::Any => {
+                    // try to find a std set assignment!
+                    if std_setcodes.len() >= 16 && ext_setcodes.len() <= 255 {
+                        TypeAssignment::Ext 
+                    } else if std_setcodes.len() < 16 {
+                        TypeAssignment::Std
+                    }else {
+                        panic!()
+                    }
+                }
+            };
+
+            let suffix_mask = match type_assignment {
+                TypeAssignment::Std => {
+                    (0xFFFFFFFF as u32)
+                        .overflowing_shl(11 - options.std_suffix_len)
+                        .0
+                }
+                TypeAssignment::Ext => {
+                    (0xFFFFFFFF as u32)
+                        .overflowing_shl(29 - options.ext_suffix_len)
+                        .0
+                }
+                TypeAssignment::Any => {
+                    panic!("wtf")
+                }
+            };
+            let suffix_assignment = match key.suffix_assignment {
+                SuffixAssignment::Suffix { value } => SuffixAssignment::Suffix { value : value & suffix_mask},
+                SuffixAssignment::None =>  {
+                    match type_assignment {
+                        TypeAssignment::Std => {
+                            let mut x : Option<SuffixAssignment> = None;
+                            for i in 0..16 {
+                                let setcode = i << 7;
+                                let suffix = if std_setcodes.contains(&setcode) {
+                                    continue;
+                                }else {
+                                    std_setcodes.push(setcode);
+                                    SuffixAssignment::Suffix { value: setcode }
+                                };
+                                x = Some(suffix);
+                                break;
+                            }
+                            x
+                        },
+                        TypeAssignment::Ext => {
+                            let mut x : Option<SuffixAssignment> = None;
+                            for i in 0..16 {
+                                let setcode = i << 7;
+                                let suffix = if std_setcodes.contains(&setcode) {
+                                    continue;
+                                }else {
+                                    ext_setcodes.push(setcode);
+                                    SuffixAssignment::Suffix { value: setcode }
+                                };
+                                x = Some(suffix);
+                                break;
+                            }
+                            x
+                        }
+                        TypeAssignment::Any => panic!(),
+                    }.expect("I thought this should never happen, well i guess i was wrong")
+                }
+            };
+            let bus_assignment = match key.bus_assignment {
+                BusAssignment::Bus { id } => BusAssignment::Bus{id},
+                BusAssignment::Any => {
+                    // search for the most empty bus
+                    let mut best_bus = 0;
+                    let mut best_cap = 0.0;
+                    for i in 0..bus_cap.len() {
+                        // println!("CAP = {}", bus_cap[i]);
+                        if bus_cap[i] > best_cap {
+                            best_cap = bus_cap[i];
+                            best_bus = i;
+                        }
+                    }
+                    if bus_cap[best_bus] < set.bus_load {
+                        panic!("ohhh this is really bad try to reduce the number of messages if not possible iam really really sorry. PS Karl");
+                    }
+                    bus_cap[best_bus] -= set.bus_load;
+                    BusAssignment::Bus { id: best_bus as u32 }
+
+                },
+            };
+            let key = SetKey {
+                bus_assignment,
+                type_assignment,
+                suffix_assignment,
+                receiver_set : key.receiver_set.clone(),
+            };
+            sets.insert(key.clone(), MessageSet {
+                key,
+                bus_load : set.bus_load,
+                messages : set.messages.clone(),
+            });
+        }
+        self.sets = sets;
+    }
+
+    pub fn display_info(&self, buses: &Vec<BusBuilder>) {
+        let mut i = 0;
+        for (key, set) in &self.sets {
+            println!("==========Set {i}===========");
+            println!("-receivers : {:?}", key.receiver_set.set);
+            println!("-bus       : {:?}", key.bus_assignment);
+            println!("-load      : {:?}", set.bus_load);
+            println!("-type      : {:?}", key.type_assignment);
+            println!("-setcode   : {:?}", key.suffix_assignment);
+            println!("-messages  : {}", set.messages.len());
+            // for msg in &set.messages {
+            //     println!("--{}", msg.0.borrow().name);
+            // }
+
+            i += 1;
+        }
+        println!("==========================");
+        for bus in buses {
+            println!("bus {}", bus.0.borrow().id);
+            let mut bus_load = 0.0;
+            for (key, set) in &self.sets {
+                match key.bus_assignment {
+                    BusAssignment::Bus { id } => {
+                        if bus.0.borrow().id == id {
+                            bus_load += set.bus_load;
+                        }
+                    }
+                    BusAssignment::Any =>  (),
+                }
+            }
+            let bus_cap =  bus.0.borrow().baudrate;
+            println!("-load  : {bus_load} / {bus_cap}");
+        }
+        println!("==========================");
+    }
+    pub fn assign_ids(&mut self) {
+
     }
 }
 
 pub fn resolve_ids_filters_and_buses(
     buses: &Vec<BusBuilder>,
     messages: &Vec<MessageBuilder>,
+    types: &Vec<TypeRef>,
 ) -> errors::Result<()> {
     let mut setset = MessageSetSet::new();
     for message in messages {
-        setset.insert(message);
+        setset.insert(message, types);
     }
-    setset.merge_sets();
+
+
+    // Dont change me the code is written to only work with those values!
+    // i know kind of stupid 
+    let options = CombineOptions {
+        allow_ext: true,
+        std_suffix_len: 4,
+        ext_suffix_len: 8,
+    };
+
+    // setset.display_info(buses);
+
+    // merge as many sets as possible
+    while setset.merge_sets(buses, &options) {}
+
+    // split sets so that no set is bigger than 127 messages!
+    // in the based base case while accounting for priority
+    while setset.split_sets(buses, types, &options) {}
+
+    setset.fix_sets(buses, &options);
+
+    setset.display_info(buses);
+
+    // Log some cool stats
 
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::{bus::BusBuilder, MessageBuilder, NetworkBuilder};
+    use crate::builder::{bus::BusBuilder, MessageBuilder, MessagePriority, NetworkBuilder};
 
     use super::resolve_ids_filters_and_buses;
 
@@ -359,34 +1012,51 @@ mod tests {
         let network_builder = NetworkBuilder::new();
         network_builder.create_node("secu");
         network_builder.create_node("becu");
+        network_builder.create_bus("can1");
+        network_builder.create_bus("can2");
 
-        let secu_to_becu = network_builder.create_message("secu_to_becu");
+        let secu_to_becu = network_builder.create_message("secu_to_becu", None);
         secu_to_becu.add_receiver("becu");
         secu_to_becu.add_transmitter("secu");
 
-        let becu_to_secu = network_builder.create_message("becu_to_secu");
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_low_{i}"), None);
+            becu_to_secu.set_any_std_id(MessagePriority::Low);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_normal_{i}"), None);
+            becu_to_secu.set_any_std_id(MessagePriority::Normal);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_high_{i}"), None);
+            becu_to_secu.set_any_std_id(MessagePriority::High);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_realtime_{i}"), None);
+            becu_to_secu.set_any_std_id(MessagePriority::Realtime);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+
+        let becu_to_secu = network_builder.create_message("becu_to_secu_2", None);
+        becu_to_secu.set_std_id(0x500);
         becu_to_secu.add_receiver("secu");
         becu_to_secu.add_transmitter("becu");
 
-        let becu_to_secu = network_builder.create_message("becu_to_secu_fixed_std");
-        becu_to_secu.set_std_id(10);
+        let becu_to_secu = network_builder.create_message("becu_to_secu_3", None);
+        becu_to_secu.set_std_id(0x200);
         becu_to_secu.add_receiver("secu");
         becu_to_secu.add_transmitter("becu");
-
-        let becu_to_secu = network_builder.create_message("becu_to_secu_fixed_bus");
-        becu_to_secu.assign_bus("bus1");
-        becu_to_secu.add_receiver("secu");
-        becu_to_secu.add_transmitter("becu");
-
-        // let becu_to_secu = network_builder.create_message("becu_to_secu_fixed_bus");
-        // becu_to_secu.assign_bus("bus2");
-        // becu_to_secu.add_receiver("secu");
-        // becu_to_secu.add_transmitter("becu");
-        //
-        // let becu_to_secu = network_builder.create_message("becu_to_secu_fixed_ext");
-        // becu_to_secu.set_ext_id(0x100);
-        // becu_to_secu.add_receiver("secu");
-        // becu_to_secu.add_transmitter("becu");
 
         let messages: Vec<MessageBuilder> = network_builder
             .0
@@ -404,8 +1074,7 @@ mod tests {
             .iter()
             .map(|b| b.clone())
             .collect();
-        resolve_ids_filters_and_buses(&buses, &messages).unwrap();
-
+        resolve_ids_filters_and_buses(&buses, &messages, &vec![]).unwrap();
         assert!(false);
     }
 }

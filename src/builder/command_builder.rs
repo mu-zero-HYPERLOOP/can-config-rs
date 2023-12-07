@@ -35,15 +35,18 @@ impl CommandBuilder {
         let rx_message_format = rx_message.make_type_format();
         rx_message_format.add_type("command_resp_erno", "erno");
 
-        CommandBuilder(make_builder_ref(CommandData {
+        let new = CommandBuilder(make_builder_ref(CommandData {
             name: name.to_owned(),
             description: None,
-            call_message: tx_message,
+            call_message: tx_message.clone(),
             call_message_format: tx_message_format,
-            resp_message: rx_message,
+            resp_message: rx_message.clone(),
             tx_node: tx_node_builder.clone(),
             visibility: Visibility::Global,
-        }))
+        }));
+        tx_message.__assign_to_command_req(&new);
+        rx_message.__assign_to_command_resp(&new);
+        new
     }
     pub fn hide(&self) {
         let mut command_data = self.0.borrow_mut();

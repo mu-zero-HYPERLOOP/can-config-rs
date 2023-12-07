@@ -7,7 +7,7 @@ use crate::{
 
 use super::{bus::BusBuilder, make_builder_ref, BuilderRef, NetworkBuilder, NodeBuilder, stream_builder::StreamBuilder, CommandBuilder};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MessagePriority {
     Default,
     Realtime,
@@ -17,17 +17,14 @@ pub enum MessagePriority {
     SuperLow,
 }
 
-// #[derive(Debug, Clone)]
-// pub enum MessageBuilderUsage {
-//     Stream(StreamBuilder),
-//     CommandReq(CommandBuilder),
-//     CommandResp(CommandBuilder),
-//     GetResp,
-//     GetReq,
-//     SetResp,
-//     SetReq,
-//     External{interval : Duration},
-// }
+#[derive(Debug, Clone)]
+pub enum MessageBuilderUsage {
+    Stream(StreamBuilder),
+    CommandReq(CommandBuilder),
+    CommandResp(CommandBuilder),
+    Configuration,
+    External{interval : Option<Duration>},
+}
 
 #[derive(Debug)]
 pub enum MessageIdTemplate {
@@ -52,8 +49,7 @@ pub struct MessageData {
     pub transmitters : Vec<NodeBuilder>,
     pub visibility: Visibility,
     pub bus: Option<BusBuilder>,
-    pub expected_interval : Option<Duration>,
-    // pub usage : MessageBuilderUsage,
+    pub usage : MessageBuilderUsage,
 }
 
 #[derive(Debug)]
@@ -97,7 +93,7 @@ impl MessageBuilder {
             bus: None,
             receivers : vec![],
             transmitters : vec![],
-            expected_interval,
+            usage : MessageBuilderUsage::External { interval: expected_interval },
             // usage,
         }))
     }
@@ -128,6 +124,18 @@ impl MessageBuilder {
                 bus
             }
         }
+    }
+    pub fn __assign_to_stream(&self, stream : &StreamBuilder) {
+        self.0.borrow_mut().usage = MessageBuilderUsage::Stream(stream.clone());
+    }
+    pub fn __assign_to_command_resp(&self, command : &CommandBuilder) {
+        self.0.borrow_mut().usage = MessageBuilderUsage::CommandResp(command.clone());
+    }
+    pub fn __assign_to_command_req(&self, command : &CommandBuilder) {
+        self.0.borrow_mut().usage = MessageBuilderUsage::CommandReq(command.clone());
+    }
+    pub fn __assign_to_configuration(&self) {
+        self.0.borrow_mut().usage = MessageBuilderUsage::Configuration;
     }
     pub fn hide(&self) {
         let mut message_data = self.0.borrow_mut();

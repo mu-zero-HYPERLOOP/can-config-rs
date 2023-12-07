@@ -1141,9 +1141,13 @@ impl NetworkBuilder {
         for message in &messages {
             let once_cell = message.__get_usage();
             if once_cell.get().is_none() {
-                let expected = builder.messages.borrow().iter().find(|m| &m.0.borrow().name == message.name()).unwrap()
-                    .0.borrow().expected_interval.clone().unwrap_or(Duration::from_secs(60));
-                once_cell.set(MessageUsage::External { interval: expected }).unwrap();
+                let expected = builder.messages.borrow().iter().find(|m| &m.0.borrow().name == message.name()).unwrap().0.borrow().usage.clone();
+                let interval = match expected {
+                    crate::builder::message_builder::MessageBuilderUsage::External { interval } => interval,
+                    _ => panic!(),
+                }.unwrap_or(Duration::from_secs(60));
+
+                once_cell.set(MessageUsage::External { interval }).unwrap();
             }
         }
 
