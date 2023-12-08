@@ -1,7 +1,8 @@
 use std::{
+    cmp::Ordering,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
-    time::Duration, cmp::Ordering,
+    time::Duration,
 };
 
 use crate::{
@@ -806,13 +807,13 @@ impl MessageSetSet {
                 BusAssignment::Any => (),
             }
         }
-        let mut sets_vec : Vec<&MessageSet> = self.sets.iter().map(|(key,set)| set).collect();
-        sets_vec.sort_by(|a,b| {
+        let mut sets_vec: Vec<&MessageSet> = self.sets.iter().map(|(key, set)| set).collect();
+        sets_vec.sort_by(|a, b| {
             if a.bus_load < b.bus_load {
                 Ordering::Greater
-            }else if a.bus_load > b.bus_load {
+            } else if a.bus_load > b.bus_load {
                 Ordering::Less
-            }else {
+            } else {
                 Ordering::Equal
             }
         });
@@ -826,10 +827,10 @@ impl MessageSetSet {
                 TypeAssignment::Any => {
                     // try to find a std set assignment!
                     if std_setcodes.len() >= 16 && ext_setcodes.len() <= 255 {
-                        TypeAssignment::Ext 
+                        TypeAssignment::Ext
                     } else if std_setcodes.len() < 16 {
                         TypeAssignment::Std
-                    }else {
+                    } else {
                         panic!()
                     }
                 }
@@ -851,45 +852,46 @@ impl MessageSetSet {
                 }
             };
             let suffix_assignment = match key.suffix_assignment {
-                SuffixAssignment::Suffix { value } => SuffixAssignment::Suffix { value : value & suffix_mask},
-                SuffixAssignment::None =>  {
-                    match type_assignment {
-                        TypeAssignment::Std => {
-                            let mut x : Option<SuffixAssignment> = None;
-                            for i in 0..16 {
-                                let setcode = i << 7;
-                                let suffix = if std_setcodes.contains(&setcode) {
-                                    continue;
-                                }else {
-                                    std_setcodes.push(setcode);
-                                    SuffixAssignment::Suffix { value: setcode }
-                                };
-                                x = Some(suffix);
-                                break;
-                            }
-                            x
-                        },
-                        TypeAssignment::Ext => {
-                            let mut x : Option<SuffixAssignment> = None;
-                            for i in 0..16 {
-                                let setcode = i << 7;
-                                let suffix = if std_setcodes.contains(&setcode) {
-                                    continue;
-                                }else {
-                                    ext_setcodes.push(setcode);
-                                    SuffixAssignment::Suffix { value: setcode }
-                                };
-                                x = Some(suffix);
-                                break;
-                            }
-                            x
+                SuffixAssignment::Suffix { value } => SuffixAssignment::Suffix {
+                    value: value & suffix_mask,
+                },
+                SuffixAssignment::None => match type_assignment {
+                    TypeAssignment::Std => {
+                        let mut x: Option<SuffixAssignment> = None;
+                        for i in 0..16 {
+                            let setcode = i << 7;
+                            let suffix = if std_setcodes.contains(&setcode) {
+                                continue;
+                            } else {
+                                std_setcodes.push(setcode);
+                                SuffixAssignment::Suffix { value: setcode }
+                            };
+                            x = Some(suffix);
+                            break;
                         }
-                        TypeAssignment::Any => panic!(),
-                    }.expect("I thought this should never happen, well i guess i was wrong")
+                        x
+                    }
+                    TypeAssignment::Ext => {
+                        let mut x: Option<SuffixAssignment> = None;
+                        for i in 0..16 {
+                            let setcode = i << 7;
+                            let suffix = if std_setcodes.contains(&setcode) {
+                                continue;
+                            } else {
+                                ext_setcodes.push(setcode);
+                                SuffixAssignment::Suffix { value: setcode }
+                            };
+                            x = Some(suffix);
+                            break;
+                        }
+                        x
+                    }
+                    TypeAssignment::Any => panic!(),
                 }
+                .expect("I thought this should never happen, well i guess i was wrong"),
             };
             let bus_assignment = match key.bus_assignment {
-                BusAssignment::Bus { id } => BusAssignment::Bus{id},
+                BusAssignment::Bus { id } => BusAssignment::Bus { id },
                 BusAssignment::Any => {
                     // search for the most empty bus
                     let mut best_bus = 0;
@@ -905,22 +907,112 @@ impl MessageSetSet {
                         panic!("ohhh this is really bad try to reduce the number of messages if not possible iam really really sorry. PS Karl");
                     }
                     bus_cap[best_bus] -= set.bus_load;
-                    BusAssignment::Bus { id: best_bus as u32 }
-
-                },
+                    BusAssignment::Bus {
+                        id: best_bus as u32,
+                    }
+                }
             };
+            let BusAssignment::Bus{ id : bus_id} = bus_assignment else {panic!();};
             let key = SetKey {
                 bus_assignment,
                 type_assignment,
                 suffix_assignment,
-                receiver_set : key.receiver_set.clone(),
+                receiver_set: key.receiver_set.clone(),
             };
-            sets.insert(key.clone(), MessageSet {
-                key,
-                bus_load : set.bus_load,
-                messages : set.messages.clone(),
-            });
+            for msg in &set.messages {
+                let bus = buses.iter().find(|b| b.0.borrow().id == bus_id).unwrap();
+                let bus_name = bus.0.borrow().name.clone();
+                msg.assign_bus(&bus_name);
+            }
+            sets.insert(
+                key.clone(),
+                MessageSet {
+                    key,
+                    bus_load: set.bus_load,
+                    messages: set.messages.clone(),
+                },
+            );
         }
+
+        // assign ids
+        for (key, set) in &mut sets {
+            let suffix_mask = match key.type_assignment {
+                TypeAssignment::Std => {
+                    (0xFFFFFFFF as u32)
+                        .overflowing_shl(11 - options.std_suffix_len)
+                        .0
+                }
+                TypeAssignment::Ext => {
+                    (0xFFFFFFFF as u32)
+                        .overflowing_shl(29 - options.ext_suffix_len)
+                        .0
+                }
+                TypeAssignment::Any => {
+                    panic!("wtf")
+                }
+            };
+            let SuffixAssignment::Suffix { value: suffix } = key.suffix_assignment else {
+                panic!();
+            };
+            let suffix = suffix & suffix_mask;
+
+            let set_size = 127;
+            let mut assigned_ids: HashSet<i32> = HashSet::new();
+            let mut next_ids: Vec<i32> = vec![];
+            let id_sep = set_size / MessagePriority::count();
+            let mut curr = set_size % MessagePriority::count();
+            for _ in 0..MessagePriority::count() {
+                curr += id_sep;
+                next_ids.push(curr as i32);
+            }
+            let mut to_assign: Vec<(MessageBuilder, i32)> = vec![];
+            for msg in &set.messages {
+                match &msg.0.borrow().id {
+                    super::message_builder::MessageIdTemplate::StdId(id) => {
+                        assigned_ids.insert(*id as i32);
+                    }
+                    super::message_builder::MessageIdTemplate::ExtId(id) => {
+                        assigned_ids.insert(*id as i32);
+                    }
+                    super::message_builder::MessageIdTemplate::AnyStd(prio) => {
+                        to_assign.push((msg.clone(), prio.to_u32() as i32));
+                    }
+                    super::message_builder::MessageIdTemplate::AnyExt(prio) => {
+                        to_assign.push((msg.clone(), prio.to_u32() as i32));
+                    }
+                    super::message_builder::MessageIdTemplate::AnyAny(prio) => {
+                        to_assign.push((msg.clone(), prio.to_u32() as i32));
+                    }
+                }
+            }
+            to_assign.sort_by_key(|(_, prio)| *prio);
+            
+            for (msg, prio) in to_assign {
+                loop {
+                    let try_id = next_ids[prio as usize];
+                    if try_id < 0 {
+                        panic!();
+                    }
+                    if assigned_ids.contains(&try_id) {
+                        if try_id == 0 {
+                            panic!("Failed to find a id assignment");
+                        }
+                        let next_try = try_id - 1;
+                        next_ids[prio as usize] = next_try;
+                    } else {
+                        match key.type_assignment {
+                            TypeAssignment::Std => msg.set_std_id(try_id as u32 | suffix),
+                            TypeAssignment::Ext => msg.set_ext_id(try_id as u32 | suffix),
+                            TypeAssignment::Any => panic!("We shoudn't be here!"),
+                        };
+                        let next_try = try_id - 1;
+                        next_ids[prio as usize] = next_try;
+                        break;
+                    }
+                }
+            }
+        }
+
         self.sets = sets;
     }
 
@@ -932,17 +1024,26 @@ impl MessageSetSet {
             println!("-bus       : {:?}", key.bus_assignment);
             println!("-load      : {:?}", set.bus_load);
             println!("-type      : {:?}", key.type_assignment);
-            println!("-setcode   : {:?}", key.suffix_assignment);
+            match key.suffix_assignment {
+                SuffixAssignment::Suffix { value } => println!("-setcode   : 0x{value:X}"),
+                SuffixAssignment::None => println!("-setcode   : ?"),
+            }
             println!("-messages  : {}", set.messages.len());
-            // for msg in &set.messages {
-            //     println!("--{}", msg.0.borrow().name);
-            // }
+            for msg in &set.messages {
+                print!("--{} : ", msg.0.borrow().name);
+                match msg.0.borrow().id {
+                    crate::builder::message_builder::MessageIdTemplate::StdId(id) => println!("0x{id:X}"),
+                    crate::builder::message_builder::MessageIdTemplate::ExtId(id) => println!("0x{id:X}"),
+                    crate::builder::message_builder::MessageIdTemplate::AnyStd(prio) => println!("p{}", prio.to_u32()),
+                    crate::builder::message_builder::MessageIdTemplate::AnyExt(prio) => println!("p{}", prio.to_u32()),
+                    crate::builder::message_builder::MessageIdTemplate::AnyAny(prio) => println!("p{}", prio.to_u32()),
+                }
+            }
 
             i += 1;
         }
         println!("==========================");
         for bus in buses {
-            println!("bus {}", bus.0.borrow().id);
             let mut bus_load = 0.0;
             for (key, set) in &self.sets {
                 match key.bus_assignment {
@@ -951,16 +1052,15 @@ impl MessageSetSet {
                             bus_load += set.bus_load;
                         }
                     }
-                    BusAssignment::Any =>  (),
+                    BusAssignment::Any => (),
                 }
             }
-            let bus_cap =  bus.0.borrow().baudrate;
+            let bus_cap = bus.0.borrow().baudrate;
             println!("-load  : {bus_load} / {bus_cap}");
+
+            println!("-bus {} : with ->  {:.2}/{}K = {:.4}%", bus.0.borrow().id, bus_load, bus_cap as f64 / 1000.0, (bus_load / bus_cap as f64) * 100.0);
         }
         println!("==========================");
-    }
-    pub fn assign_ids(&mut self) {
-
     }
 }
 
@@ -974,9 +1074,8 @@ pub fn resolve_ids_filters_and_buses(
         setset.insert(message, types);
     }
 
-
     // Dont change me the code is written to only work with those values!
-    // i know kind of stupid 
+    // i know kind of stupid
     let options = CombineOptions {
         allow_ext: true,
         std_suffix_len: 4,

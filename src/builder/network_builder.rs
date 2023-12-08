@@ -15,7 +15,7 @@ use crate::{
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
         ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding, message::MessageUsage,
     },
-    errors::{self, ConfigError},
+    errors::{self, ConfigError}, builder::message_resolution_protocol::resolve_ids_filters_and_buses,
 };
 
 use super::{
@@ -566,13 +566,14 @@ impl NetworkBuilder {
     }
 
     pub fn build(self) -> errors::Result<NetworkRef> {
+
+        if self.0.borrow().buses.borrow().is_empty() {
+            // ensure that there is always at least one bus defined!
+            self.create_bus("can0");
+        }
         let builder = self.0.borrow();
         let baudrate = builder.baudrate.unwrap_or(1000000);
 
-        // create busses!
-        if builder.buses.borrow().is_empty() {
-            return errors::Result::Err(ConfigError::NoBusAvaiable);
-        }
         let buses: Vec<BusRef> = builder
             .buses
             .borrow()
@@ -642,8 +643,14 @@ impl NetworkBuilder {
             types.push(type_ref);
         }
 
-        // resolve any ids.
-        Self::resolve_ids_filters_and_buses(&mut builder.messages.borrow_mut())?;
+        let tmp_buses = builder.buses.borrow().clone();
+        let tmp_messages = builder.messages.borrow().clone();
+        // we have to drop builder before we assign ids, because the following 
+        // function might require a mutable reference to self for assigning ids 
+        // and buses!
+        drop(builder);
+        resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &types)?;
+        let builder = self.0.borrow();
 
         let mut messages = vec![];
         for message_builder in builder.messages.borrow().iter() {

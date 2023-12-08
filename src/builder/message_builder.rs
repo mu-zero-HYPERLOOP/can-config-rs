@@ -7,14 +7,27 @@ use crate::{
 
 use super::{bus::BusBuilder, make_builder_ref, BuilderRef, NetworkBuilder, NodeBuilder, stream_builder::StreamBuilder, CommandBuilder};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MessagePriority {
-    Default,
     Realtime,
     High,
     Normal,
     Low,
     SuperLow,
+}
+impl MessagePriority {
+    pub fn to_u32(&self) -> u32 {
+        match &self {
+            MessagePriority::Realtime => 0,
+            MessagePriority::High => 1,
+            MessagePriority::Normal => 2,
+            MessagePriority::Low => 3,
+            MessagePriority::SuperLow => 4,
+        }
+    }
+    pub fn count() -> u32 {
+        5
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -26,7 +39,7 @@ pub enum MessageBuilderUsage {
     External{interval : Option<Duration>},
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MessageIdTemplate {
     StdId(u32),
     ExtId(u32),
@@ -71,7 +84,6 @@ pub struct MessageTypeFormatData(pub Vec<(String, String)>);
 impl MessagePriority {
     pub fn min_id(&self) -> u32 {
         match &self {
-            MessagePriority::Default => 800,
             MessagePriority::Realtime => 0,
             MessagePriority::High => 400,
             MessagePriority::Normal => 800,
@@ -86,7 +98,7 @@ impl MessageBuilder {
         MessageBuilder(make_builder_ref(MessageData {
             name: name.to_owned(),
             description: None,
-            id: MessageIdTemplate::AnyAny(MessagePriority::Default),
+            id: MessageIdTemplate::AnyAny(MessagePriority::Normal),
             format: MessageFormat::Empty,
             network_builder: network_builder.clone(),
             visibility: Visibility::Global,
