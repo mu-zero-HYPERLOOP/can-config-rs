@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet, BTreeMap, BTreeSet},
     hash::{Hash, Hasher},
     time::Duration,
 };
@@ -13,7 +13,7 @@ use crate::{
 
 use super::{bus::BusBuilder, MessageBuilder};
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 enum BusAssignment {
     Bus { id: u32 },
     Any,
@@ -31,7 +31,7 @@ impl BusAssignment {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 enum TypeAssignment {
     Std,
     Ext,
@@ -51,7 +51,7 @@ impl TypeAssignment {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 enum SuffixAssignment {
     Suffix { value: u32 },
     None,
@@ -74,9 +74,9 @@ impl SuffixAssignment {
     }
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 struct ReceiverSet {
-    set: HashSet<String>,
+    set: BTreeSet<String>,
     hash: u64,
 }
 
@@ -84,7 +84,7 @@ impl ReceiverSet {
     fn new(message: &MessageBuilder) -> Self {
         let message_data = message.0.borrow();
         let receivers = &message_data.receivers;
-        let mut set = HashSet::new();
+        let mut set = BTreeSet::new();
         let mut hasher = DefaultHasher::new();
         let mut sorted = vec![];
         for rx in receivers {
@@ -116,7 +116,7 @@ struct CombineOptions {
     ext_suffix_len: u32,
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone, PartialOrd, Ord)]
 struct SetKey {
     bus_assignment: BusAssignment,
     type_assignment: TypeAssignment,
@@ -380,7 +380,7 @@ impl MessageSet {
 }
 
 struct MessageSetSet {
-    sets: HashMap<SetKey, MessageSet>,
+    sets: BTreeMap<SetKey, MessageSet>,
 }
 impl std::fmt::Debug for MessageSetSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -391,7 +391,7 @@ impl std::fmt::Debug for MessageSetSet {
 impl MessageSetSet {
     pub fn new() -> Self {
         Self {
-            sets: HashMap::new(),
+            sets: BTreeMap::new(),
         }
     }
     pub fn insert(&mut self, message: &MessageBuilder, types: &Vec<TypeRef>) {
@@ -535,7 +535,7 @@ impl MessageSetSet {
         types: &Vec<TypeRef>,
         options: &CombineOptions,
     ) -> bool {
-        let mut sets: HashMap<SetKey, MessageSet> = HashMap::new();
+        let mut sets: BTreeMap<SetKey, MessageSet> = BTreeMap::new();
         let mut did_split = false;
 
         for (key, set) in &self.sets {
@@ -778,7 +778,7 @@ impl MessageSetSet {
     }
 
     pub fn fix_sets(&mut self, buses: &Vec<BusBuilder>, options: &CombineOptions) {
-        let mut sets: HashMap<SetKey, MessageSet> = HashMap::new();
+        let mut sets: BTreeMap<SetKey, MessageSet> = BTreeMap::new();
 
         let mut std_setcodes: Vec<u32> = vec![];
         let mut ext_setcodes: Vec<u32> = vec![];
@@ -807,7 +807,7 @@ impl MessageSetSet {
                 BusAssignment::Any => (),
             }
         }
-        let mut sets_vec: Vec<&MessageSet> = self.sets.iter().map(|(key, set)| set).collect();
+        let mut sets_vec: Vec<&MessageSet> = self.sets.iter().map(|(_, set)| set).collect();
         sets_vec.sort_by(|a, b| {
             if a.bus_load < b.bus_load {
                 Ordering::Greater
