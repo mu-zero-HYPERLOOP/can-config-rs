@@ -16,6 +16,7 @@ pub struct CommandData {
     pub call_message_format: MessageTypeFormatBuilder,
     pub resp_message: MessageBuilder,
     pub visibility: Visibility,
+    pub expected_interval : Duration,
 }
 
 impl CommandBuilder {
@@ -43,10 +44,14 @@ impl CommandBuilder {
             resp_message: rx_message.clone(),
             tx_node: tx_node_builder.clone(),
             visibility: Visibility::Global,
+            expected_interval : Duration::from_millis(1000),
         }));
         tx_message.__assign_to_command_req(&new);
         rx_message.__assign_to_command_resp(&new);
         new
+    }
+    pub fn expected_interval(&self, interval : Duration) {
+        self.0.borrow_mut().expected_interval = interval;
     }
     pub fn hide(&self) {
         let mut command_data = self.0.borrow_mut();

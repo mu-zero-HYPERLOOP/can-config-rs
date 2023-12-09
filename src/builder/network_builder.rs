@@ -15,7 +15,7 @@ use crate::{
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
         ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding, message::MessageUsage,
     },
-    errors::{self, ConfigError}, builder::message_resolution_protocol::resolve_ids_filters_and_buses,
+    errors::{self}, builder::message_resolution_protocol::resolve_ids_filters_and_buses,
 };
 
 use super::{
@@ -73,6 +73,7 @@ impl NetworkBuilder {
 
         let get_req_message =
             network_builder.create_message("get_req", None);
+        get_req_message.__assign_to_configuration();
         let get_req_format = get_req_message.make_type_format();
         let get_req_header = network_builder.define_struct("get_req_header");
         get_req_header.add_attribute(oe_index_name, "u13").unwrap();
@@ -88,6 +89,7 @@ impl NetworkBuilder {
 
         let get_resp_message =
             network_builder.create_message("get_resp", None);
+        get_resp_message.__assign_to_configuration();
         let get_resp_format = get_resp_message.make_type_format();
         let get_resp_header = network_builder.define_struct("get_resp_header");
         get_resp_header.add_attribute(sof_name, "u1").unwrap();
@@ -107,6 +109,7 @@ impl NetworkBuilder {
 
         let set_req_message =
             network_builder.create_message("set_req", None);
+        set_req_message.__assign_to_configuration();
         let set_req_format = set_req_message.make_type_format();
         let set_req_header = network_builder.define_struct("set_req_header");
         set_req_header.add_attribute(sof_name, "u1").unwrap();
@@ -126,6 +129,7 @@ impl NetworkBuilder {
 
         let set_resp_message =
             network_builder.create_message("set_resp", None);
+        set_resp_message.__assign_to_configuration();
         let set_resp_format = set_resp_message.make_type_format();
         let set_resp_header = network_builder.define_struct("set_resp_header");
         set_resp_header.add_attribute(client_id_name, "u8").unwrap();

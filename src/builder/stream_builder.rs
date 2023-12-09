@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::config::Visibility;
 
 use super::{NodeBuilder, make_builder_ref, BuilderRef, MessageBuilder, MessageTypeFormatBuilder, ObjectEntryBuilder, MessagePriority};
@@ -14,6 +16,7 @@ pub struct StreamData {
     pub tx_node: NodeBuilder,
     pub object_entries: Vec<ObjectEntryBuilder>,
     pub visbility: Visibility,
+    pub interval : (Duration, Duration),
 }
 
 #[derive(Debug, Clone)]
@@ -46,9 +49,16 @@ impl StreamBuilder {
             tx_node: node_builder,
             object_entries: vec![],
             visbility: Visibility::Global,
+            interval : (Duration::from_millis(50), Duration::from_millis(500)),
         }));
         message.__assign_to_stream(&new);
         new
+    }
+    // max : max time between two messages
+    // min : min time between two messages
+    pub fn set_interval(&self, min : Duration, max : Duration) {
+        assert!(min.as_micros() < max.as_micros());
+        self.0.borrow_mut().interval = (min, max);
     }
     pub fn hide(&self) {
         let mut stream_data = self.0.borrow_mut();

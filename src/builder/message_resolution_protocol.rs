@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map::DefaultHasher, HashMap, HashSet, BTreeMap, BTreeSet},
+    collections::{hash_map::DefaultHasher, HashSet, BTreeMap, BTreeSet},
     hash::{Hash, Hasher},
     time::Duration,
 };
@@ -363,16 +363,22 @@ impl MessageSet {
         let interval = match &message.0.borrow().usage {
             MessageBuilderUsage::Stream(stream) => {
                 //TODO actually get the correct interval
-                Duration::from_millis(10)
+                stream.0.borrow().interval.0
             }
-            MessageBuilderUsage::CommandReq(command) => Duration::from_millis(100),
-            MessageBuilderUsage::CommandResp(command) => Duration::from_millis(100),
-            MessageBuilderUsage::Configuration => Duration::from_secs(1),
+            MessageBuilderUsage::CommandReq(command) => command.0.borrow().expected_interval,
+            MessageBuilderUsage::CommandResp(command) => command.0.borrow().expected_interval,
+            MessageBuilderUsage::Configuration => Duration::from_secs(5),
             MessageBuilderUsage::External { interval } => {
-                interval.unwrap_or(Duration::from_secs(60))
+                // intentionally really low because we might not be able to set this 
+                // properly
+                interval.unwrap_or(Duration::from_millis(50)) 
             }
         };
-        let bus_load = bus_frame_load as f64 / interval.as_secs() as f64;
+        println!("dlc = {dlc}");
+        println!("interval = {interval:?}");
+        println!("frame_len = {bus_frame_load}");
+        let bus_load = (bus_frame_load as f64 * 1.0e9) / interval.as_nanos() as f64;
+        println!("bus_load = {bus_load}");
         self.bus_load += bus_load;
 
         self.messages.push(message.clone());
@@ -531,9 +537,9 @@ impl MessageSetSet {
 
     pub fn split_sets(
         &mut self,
-        buses: &Vec<BusBuilder>,
+        _buses: &Vec<BusBuilder>,
         types: &Vec<TypeRef>,
-        options: &CombineOptions,
+        _options: &CombineOptions,
     ) -> bool {
         let mut sets: BTreeMap<SetKey, MessageSet> = BTreeMap::new();
         let mut did_split = false;
@@ -547,21 +553,21 @@ impl MessageSetSet {
                         // Where does this suffix actually come from!
 
                         // compare suffixes for the len
-                        let suffix_mask = match set.key.type_assignment {
-                            TypeAssignment::Std => {
-                                (0xFFFFFFFF as u32)
-                                    .overflowing_shl(11 - options.std_suffix_len)
-                                    .0
-                            }
-                            TypeAssignment::Ext => {
-                                (0xFFFFFFFF as u32)
-                                    .overflowing_shl(29 - options.ext_suffix_len)
-                                    .0
-                            }
-                            TypeAssignment::Any => {
-                                panic!("if a suffix is specified the frame must have a type")
-                            }
-                        };
+                        // let suffix_mask = match set.key.type_assignment {
+                        //     TypeAssignment::Std => {
+                        //         (0xFFFFFFFF as u32)
+                        //             .overflowing_shl(11 - options.std_suffix_len)
+                        //             .0
+                        //     }
+                        //     TypeAssignment::Ext => {
+                        //         (0xFFFFFFFF as u32)
+                        //             .overflowing_shl(29 - options.ext_suffix_len)
+                        //             .0
+                        //     }
+                        //     TypeAssignment::Any => {
+                        //         panic!("if a suffix is specified the frame must have a type")
+                        //     }
+                        // };
                         let mut set_a = MessageSet {
                             bus_load: 0.0,
                             key: key.clone(),
@@ -1102,6 +1108,8 @@ pub fn resolve_ids_filters_and_buses(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use crate::builder::{bus::BusBuilder, MessageBuilder, MessagePriority, NetworkBuilder};
 
     use super::resolve_ids_filters_and_buses;
@@ -1115,37 +1123,9 @@ mod tests {
         network_builder.create_bus("can2");
 
         let secu_to_becu = network_builder.create_message("secu_to_becu", None);
+        secu_to_becu.set_any_std_id(MessagePriority::Low);
         secu_to_becu.add_receiver("becu");
         secu_to_becu.add_transmitter("secu");
-
-        for i in 0..50 {
-            let becu_to_secu =
-                network_builder.create_message(&format!("becu_to_secu_low_{i}"), None);
-            becu_to_secu.set_any_std_id(MessagePriority::Low);
-            becu_to_secu.add_receiver("secu");
-            becu_to_secu.add_transmitter("becu");
-        }
-        for i in 0..50 {
-            let becu_to_secu =
-                network_builder.create_message(&format!("becu_to_secu_normal_{i}"), None);
-            becu_to_secu.set_any_std_id(MessagePriority::Normal);
-            becu_to_secu.add_receiver("secu");
-            becu_to_secu.add_transmitter("becu");
-        }
-        for i in 0..50 {
-            let becu_to_secu =
-                network_builder.create_message(&format!("becu_to_secu_high_{i}"), None);
-            becu_to_secu.set_any_std_id(MessagePriority::High);
-            becu_to_secu.add_receiver("secu");
-            becu_to_secu.add_transmitter("becu");
-        }
-        for i in 0..50 {
-            let becu_to_secu =
-                network_builder.create_message(&format!("becu_to_secu_realtime_{i}"), None);
-            becu_to_secu.set_any_std_id(MessagePriority::Realtime);
-            becu_to_secu.add_receiver("secu");
-            becu_to_secu.add_transmitter("becu");
-        }
 
         let becu_to_secu = network_builder.create_message("becu_to_secu_2", None);
         becu_to_secu.set_std_id(0x500);
@@ -1156,6 +1136,36 @@ mod tests {
         becu_to_secu.set_std_id(0x200);
         becu_to_secu.add_receiver("secu");
         becu_to_secu.add_transmitter("becu");
+
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_low_{i}"), Some(Duration::from_millis(1000)));
+            becu_to_secu.set_any_std_id(MessagePriority::Low);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_normal_{i}"), Some(Duration::from_millis(500)));
+            becu_to_secu.set_any_std_id(MessagePriority::Normal);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_high_{i}"), Some(Duration::from_millis(100)));
+            becu_to_secu.set_any_std_id(MessagePriority::High);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+        for i in 0..50 {
+            let becu_to_secu =
+                network_builder.create_message(&format!("becu_to_secu_realtime_{i}"), Some(Duration::from_millis(50)));
+            becu_to_secu.set_any_std_id(MessagePriority::Realtime);
+            becu_to_secu.add_receiver("secu");
+            becu_to_secu.add_transmitter("becu");
+        }
+
 
         let messages: Vec<MessageBuilder> = network_builder
             .0
@@ -1175,5 +1185,10 @@ mod tests {
             .collect();
         resolve_ids_filters_and_buses(&buses, &messages, &vec![]).unwrap();
         assert!(false);
+    }
+
+    #[test]
+    fn idrp_test1() {
+
     }
 }
