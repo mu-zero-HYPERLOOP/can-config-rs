@@ -23,7 +23,7 @@ use super::{
     make_builder_ref,
     message_builder::MessageIdTemplate,
     BuilderRef, EnumBuilder, MessageBuilder, MessageFormat, NodeBuilder, StructBuilder,
-    TypeBuilder,
+    TypeBuilder, MessagePriority,
 };
 
 #[derive(Debug, Clone)]
@@ -73,6 +73,7 @@ impl NetworkBuilder {
 
         let get_req_message =
             network_builder.create_message("get_req", None);
+        get_req_message.set_any_std_id(MessagePriority::Low);
         get_req_message.__assign_to_configuration();
         let get_req_format = get_req_message.make_type_format();
         let get_req_header = network_builder.define_struct("get_req_header");
@@ -89,6 +90,7 @@ impl NetworkBuilder {
 
         let get_resp_message =
             network_builder.create_message("get_resp", None);
+        get_resp_message.set_any_std_id(MessagePriority::Low);
         get_resp_message.__assign_to_configuration();
         let get_resp_format = get_resp_message.make_type_format();
         let get_resp_header = network_builder.define_struct("get_resp_header");
@@ -109,6 +111,7 @@ impl NetworkBuilder {
 
         let set_req_message =
             network_builder.create_message("set_req", None);
+        set_req_message.set_any_std_id(MessagePriority::Low);
         set_req_message.__assign_to_configuration();
         let set_req_format = set_req_message.make_type_format();
         let set_req_header = network_builder.define_struct("set_req_header");
@@ -129,6 +132,7 @@ impl NetworkBuilder {
 
         let set_resp_message =
             network_builder.create_message("set_resp", None);
+        set_resp_message.set_any_std_id(MessagePriority::Low);
         set_resp_message.__assign_to_configuration();
         let set_resp_format = set_resp_message.make_type_format();
         let set_resp_header = network_builder.define_struct("set_resp_header");
@@ -561,14 +565,6 @@ impl NetworkBuilder {
             .collect())
     }
 
-    fn resolve_ids_filters_and_buses(messages: &Vec<MessageBuilder>) -> errors::Result<()> {
-        // for message in messages {
-        // let message_data = message.0.borrow_mut();
-        // }
-
-        Ok(())
-    }
-
     pub fn build(self) -> errors::Result<NetworkRef> {
 
         if self.0.borrow().buses.borrow().is_empty() {
@@ -892,7 +888,7 @@ impl NetworkBuilder {
                     .iter()
                     .find(|m| m.name() == tx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
-                println!("message = {}", message_ref.name());
+                // println!("message = {}", message_ref.name());
                 match &message_ref.encoding() {
                     Some(encoding) => {
                         for attribute in encoding.attributes() {

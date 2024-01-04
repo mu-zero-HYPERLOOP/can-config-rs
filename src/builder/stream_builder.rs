@@ -72,15 +72,27 @@ impl StreamBuilder {
         let mut stream_data = self.0.borrow_mut();
         let node = stream_data.tx_node.clone();
         let node_data = node.0.borrow();
-        let oe = node_data
+        let oe = match node_data
             .object_entries
             .iter()
             .find(|oe| oe.0.borrow().name == name)
-            .cloned()
-            .unwrap_or_else(|| node.create_object_entry(name, "u1"));
+            .cloned() {
+                Some(oe) => oe,
+                None => {
+                    drop(node_data);
+                    node.create_object_entry(name, "u1")
+                }
+            };
+            // .unwrap_or_else(|| node.create_object_entry(name, "u1"));
         stream_data.object_entries.push(oe.clone());
         let oe_data = oe.0.borrow();
         stream_data.format.add_type(&oe_data.ty, &oe_data.name);
+    }
+    pub fn set_priority(&self, priority : MessagePriority) {
+        self.0.borrow().message.set_any_std_id(priority);
+    }
+    pub fn set_priority_with_extended_id(&self, priority : MessagePriority) {
+        self.0.borrow().message.set_any_ext_id(priority);
     }
 }
 

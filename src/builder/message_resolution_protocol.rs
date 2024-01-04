@@ -1,12 +1,12 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map::DefaultHasher, HashSet, BTreeMap, BTreeSet},
+    collections::{hash_map::DefaultHasher, HashSet, BTreeMap, BTreeSet, HashMap},
     hash::{Hash, Hasher},
     time::Duration,
 };
 
 use crate::{
-    builder::{message_builder::MessageBuilderUsage, MessagePriority},
+    builder::{message_builder::{MessageBuilderUsage, MessageIdTemplate}, MessagePriority},
     config::{Type, TypeRef},
     errors,
 };
@@ -374,11 +374,11 @@ impl MessageSet {
                 interval.unwrap_or(Duration::from_millis(50)) 
             }
         };
-        println!("dlc = {dlc}");
-        println!("interval = {interval:?}");
-        println!("frame_len = {bus_frame_load}");
+        // println!("dlc = {dlc}");
+        // println!("interval = {interval:?}");
+        // println!("frame_len = {bus_frame_load}");
         let bus_load = (bus_frame_load as f64 * 1.0e9) / interval.as_nanos() as f64;
-        println!("bus_load = {bus_load}");
+        // println!("bus_load = {bus_load}");
         self.bus_load += bus_load;
 
         self.messages.push(message.clone());
@@ -416,7 +416,7 @@ impl MessageSetSet {
     }
 
     pub fn merge_sets(&mut self, buses: &Vec<BusBuilder>, options: &CombineOptions) -> bool {
-        self.display_info(buses);
+        // self.display_info(buses);
 
         let sets: Vec<MessageSet> = self.sets.values().map(|s| s.clone()).collect();
 
@@ -1022,33 +1022,112 @@ impl MessageSetSet {
         self.sets = sets;
     }
 
-    pub fn display_info(&self, buses: &Vec<BusBuilder>) {
-        let mut i = 0;
-        for (key, set) in &self.sets {
-            println!("==========Set {i}===========");
-            println!("-receivers : {:?}", key.receiver_set.set);
-            println!("-bus       : {:?}", key.bus_assignment);
-            println!("-load      : {:?}", set.bus_load);
-            println!("-type      : {:?}", key.type_assignment);
-            match key.suffix_assignment {
-                SuffixAssignment::Suffix { value } => println!("-setcode   : 0x{value:X}"),
-                SuffixAssignment::None => println!("-setcode   : ?"),
-            }
-            println!("-messages  : {}", set.messages.len());
-            for msg in &set.messages {
-                print!("--{} : ", msg.0.borrow().name);
-                match msg.0.borrow().id {
-                    crate::builder::message_builder::MessageIdTemplate::StdId(id) => println!("0x{id:X}"),
-                    crate::builder::message_builder::MessageIdTemplate::ExtId(id) => println!("0x{id:X}"),
-                    crate::builder::message_builder::MessageIdTemplate::AnyStd(prio) => println!("p{}", prio.to_u32()),
-                    crate::builder::message_builder::MessageIdTemplate::AnyExt(prio) => println!("p{}", prio.to_u32()),
-                    crate::builder::message_builder::MessageIdTemplate::AnyAny(prio) => println!("p{}", prio.to_u32()),
+    pub fn display_info(&self, buses: &Vec<BusBuilder>, priority_map : HashMap<String, MessageIdTemplate>) {
+        // let mut i = 0;
+        // for (key, set) in &self.sets {
+        //     println!("==========Set {i}===========");
+        //     println!("-receivers : {:?}", key.receiver_set.set);
+        //     println!("-bus       : {:?}", key.bus_assignment);
+        //     println!("-load      : {:?}", set.bus_load);
+        //     println!("-type      : {:?}", key.type_assignment);
+        //     match key.suffix_assignment {
+        //         SuffixAssignment::Suffix { value } => println!("-setcode   : 0x{value:X}"),
+        //         SuffixAssignment::None => println!("-setcode   : ?"),
+        //     }
+        //     println!("-messages  : {}", set.messages.len());
+        //     for msg in &set.messages {
+        //         print!("--{} : ", msg.0.borrow().name);
+        //         match msg.0.borrow().id {
+        //             crate::builder::message_builder::MessageIdTemplate::StdId(id) => println!("0x{id:X}"),
+        //             crate::builder::message_builder::MessageIdTemplate::ExtId(id) => println!("0x{id:X}"),
+        //             crate::builder::message_builder::MessageIdTemplate::AnyStd(prio) => println!("p{}", prio.to_u32()),
+        //             crate::builder::message_builder::MessageIdTemplate::AnyExt(prio) => println!("p{}", prio.to_u32()),
+        //             crate::builder::message_builder::MessageIdTemplate::AnyAny(prio) => println!("p{}", prio.to_u32()),
+        //         }
+        //     }
+        //
+        //     i += 1;
+        // }
+        let mut messages : Vec<MessageBuilder>= self.sets.iter().map(|set| set.1.messages.clone()).flatten().collect();
+        assert_eq!(messages.len(), priority_map.len());
+        messages.sort_by(|a,b| {
+            match a.0.borrow().id {
+                crate::builder::message_builder::MessageIdTemplate::StdId(aid) => {
+                    match b.0.borrow().id {
+                        crate::builder::message_builder::MessageIdTemplate::StdId(bid) => {
+                            if aid < bid {
+                                Ordering::Less
+                            }else {
+                                Ordering::Greater
+                            }
+                        }
+                        crate::builder::message_builder::MessageIdTemplate::ExtId(_) => Ordering::Less,
+                        _ => panic!(),
+                    }
+                },
+                crate::builder::message_builder::MessageIdTemplate::ExtId(aid) => {
+                    match b.0.borrow().id {
+                        crate::builder::message_builder::MessageIdTemplate::StdId(_) => Ordering::Greater,
+                        crate::builder::message_builder::MessageIdTemplate::ExtId(bid) => {
+                            if aid < bid {
+                                Ordering::Less
+                            }else {
+                                Ordering::Greater
+                            }
+                        }
+                        _ => panic!(),
+                    }
                 }
+                _ => panic!(),
             }
+        });
+        println!("===========ID-ASSIGNMENT=====================");
+        for msg in &messages {
+            let id_str = match msg.0.borrow().id {
+                MessageIdTemplate::StdId(id) => format!("0x{id:X}"),
+                MessageIdTemplate::ExtId(id) => format!("0x{id:X}x"),
+                _ => panic!(),
+            };
 
-            i += 1;
+            let priority = match priority_map.get(&msg.0.borrow().name) {
+                Some(id_temp) => match id_temp {
+                    MessageIdTemplate::StdId(_) => "STD_FIXED".to_owned(),
+                    MessageIdTemplate::ExtId(_) => "EXT_FIXED".to_owned(),
+                    MessageIdTemplate::AnyStd(prio) => {
+                        match prio {
+                            MessagePriority::Realtime => "STD-REALTIME".to_owned(),
+                            MessagePriority::High => "STD-HIGH".to_owned(),
+                            MessagePriority::Normal => "STD-NORMAL".to_owned(),
+                            MessagePriority::Low => "STD-LOW".to_owned(),
+                            MessagePriority::SuperLow => "STD-SUPER-LOW".to_owned(),
+                        }
+                    }
+                    MessageIdTemplate::AnyExt(prio) => {
+                        match prio {
+                            MessagePriority::Realtime => "EXT-REALTIME".to_owned(),
+                            MessagePriority::High => "EXT-HIGH".to_owned(),
+                            MessagePriority::Normal => "EXT-NORMAL".to_owned(),
+                            MessagePriority::Low => "EXT-LOW".to_owned(),
+                            MessagePriority::SuperLow => "EXT-SUPER-LOW".to_owned(),
+                        }
+                    }
+                    MessageIdTemplate::AnyAny(prio) => {
+                        match prio {
+                            MessagePriority::Realtime => "ANY-REALTIME".to_owned(),
+                            MessagePriority::High => "ANY-HIGH".to_owned(),
+                            MessagePriority::Normal => "ANY-NORMAL".to_owned(),
+                            MessagePriority::Low => "ANY-LOW".to_owned(),
+                            MessagePriority::SuperLow => "ANY-SUPER-LOW".to_owned(),
+                        }
+                    }
+                }
+                None => panic!("droped a message somewhere!"),
+            };
+
+            println!("{: <35} {priority: <20} -> {id_str: <6}", msg.0.borrow().name);
         }
-        println!("==========================");
+        
+        println!("============ESTIMATED-BUS-LOADS==============");
         for bus in buses {
             let mut bus_load = 0.0;
             for (key, set) in &self.sets {
@@ -1062,11 +1141,11 @@ impl MessageSetSet {
                 }
             }
             let bus_cap = bus.0.borrow().baudrate;
-            println!("-load  : {bus_load} / {bus_cap}");
+            // println!("-load  : {bus_load} / {bus_cap}");
 
-            println!("-bus {} : with ->  {:.2}/{}K = {:.4}%", bus.0.borrow().id, bus_load, bus_cap as f64 / 1000.0, (bus_load / bus_cap as f64) * 100.0);
+            println!("-bus {} : with -> {:.2}/{} kib/s = {:.4}%", bus.0.borrow().id, bus_load, bus_cap as f64 / 1000.0, (bus_load / bus_cap as f64) * 100.0);
         }
-        println!("==========================");
+        println!("=============================================");
     }
 }
 
@@ -1075,6 +1154,16 @@ pub fn resolve_ids_filters_and_buses(
     messages: &Vec<MessageBuilder>,
     types: &Vec<TypeRef>,
 ) -> errors::Result<()> {
+
+    // store the id assignments of the messages before modifying them 
+    // only required for debug output or debug info.
+    // iam aware that this is horrible, but i realized to late that builders
+    // are mutable datatypes.
+    let mut priority_map : HashMap<String, MessageIdTemplate> = HashMap::new();
+    for msg in messages {
+        priority_map.insert(msg.0.borrow().name.clone(), msg.0.borrow().id.clone());
+    }
+
     let mut setset = MessageSetSet::new();
     for message in messages {
         setset.insert(message, types);
@@ -1099,7 +1188,7 @@ pub fn resolve_ids_filters_and_buses(
 
     setset.fix_sets(buses, &options);
 
-    setset.display_info(buses);
+    setset.display_info(buses, priority_map);
 
     // Log some cool stats
 
