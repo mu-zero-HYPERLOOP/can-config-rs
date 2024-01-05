@@ -1004,6 +1004,7 @@ impl NetworkBuilder {
                     mappings,
                     message.clone(),
                     stream_data.visbility.clone(),
+                    stream_data.interval,
                 ));
                 message.__set_usage(MessageUsage::Stream(stream_ref.clone()));
                 tx_streams.push(stream_ref);
@@ -1129,6 +1130,7 @@ impl NetworkBuilder {
                         mappings,
                         tx_stream.message().clone(),
                         rx_stream_data.visibility.clone(),
+                        *tx_stream.interval()
                     )));
             }
         }
