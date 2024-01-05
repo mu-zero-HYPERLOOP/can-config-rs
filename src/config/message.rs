@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Duration, cell::OnceCell};
+use std::{fmt::Display, time::Duration, cell::OnceCell, sync::OnceLock};
 
 use super::{ConfigRef, MessageEncoding, SignalRef, Visibility, bus::BusRef, stream::StreamRef, CommandRef};
 
@@ -33,7 +33,7 @@ pub struct Message {
     visibility: Visibility,
     dlc : u8,
     bus : BusRef,
-    usage : OnceCell<MessageUsage>,
+    usage : OnceLock<MessageUsage>,
 }
 
 
@@ -54,7 +54,7 @@ impl Message {
             visibility,
             dlc,
             bus,
-            usage : OnceCell::new(),
+            usage : OnceLock::new(),
         }
     }
     pub fn usage(&self) -> &MessageUsage {
@@ -63,7 +63,7 @@ impl Message {
     pub fn __set_usage(&self, usage : MessageUsage) {
         self.usage.set(usage).expect("__set_usage can only be called once (when calling NetworkBuilder::build(&self))");
     }
-    pub fn __get_usage(&self) -> &OnceCell<MessageUsage> {
+    pub fn __get_usage(&self) -> &OnceLock<MessageUsage> {
         &self.usage
     }
 
