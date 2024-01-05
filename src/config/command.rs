@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::{ConfigRef, MessageRef, Visibility, Message};
 
 
@@ -10,6 +12,7 @@ pub struct Command {
     tx_message: MessageRef,
     rx_message: MessageRef,
     visibility: Visibility,
+    expected_interval : Duration,
 }
 
 impl Command {
@@ -17,17 +20,22 @@ impl Command {
                description : Option<String>,
                tx_message : MessageRef,
                rx_message : MessageRef,
-               visibility : Visibility) -> Self {
+               visibility : Visibility, 
+               expected_interval : Duration) -> Self {
         Self{
             name,
             description,
             tx_message,
             rx_message,
-            visibility
+            visibility,
+            expected_interval
         }
     }
     pub fn visibility(&self) -> &Visibility {
         &self.visibility
+    }
+    pub fn expected_interval(&self) -> &Duration {
+        &self.expected_interval
     }
     pub fn name(&self) -> &str {
         &self.name

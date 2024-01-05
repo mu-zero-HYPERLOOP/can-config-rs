@@ -919,6 +919,7 @@ impl NetworkBuilder {
                     tx_message.clone(),
                     rx_message.clone(),
                     command_data.visibility.clone(),
+                    command_data.expected_interval.clone()
                 ));
                 rx_message.__set_usage(MessageUsage::CommandResp(command_ref.clone()));
                 tx_message.__set_usage(MessageUsage::CommandReq(command_ref.clone()));
