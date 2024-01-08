@@ -138,11 +138,12 @@ impl NodeBuilder {
             .iter()
             .find(|s| s.0.borrow().name == tx_stream_name)
             .cloned();
+        drop(node_data);
+        drop(tx_node_data);
         let tx_stream = match tx_stream_opt {
             Some(tx_stream) => tx_stream,
             None => tx_node.create_stream(tx_stream_name),
         };
-        drop(node_data);
 
         let tx_stream_data = tx_stream.0.borrow();
         self.add_rx_message(&tx_stream_data.message);
