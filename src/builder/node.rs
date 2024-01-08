@@ -138,6 +138,7 @@ impl NodeBuilder {
             .iter()
             .find(|s| s.0.borrow().name == tx_stream_name)
             .cloned();
+        drop(tx_node_data);
         let tx_stream = match tx_stream_opt {
             Some(tx_stream) => tx_stream,
             None => tx_node.create_stream(tx_stream_name),
