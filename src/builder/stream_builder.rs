@@ -118,8 +118,14 @@ impl ReceiveStreamBuilder {
             .object_entries
             .iter()
             .position(|oe| oe.0.borrow().name == from);
-        let Some(pos) = opt_pos else {
-            panic!("invalid rx stream mapping");
+        drop(tx_stream_data);
+        let pos = match opt_pos {
+            Some(pos) => pos,
+            None => {
+                //tx_stream_data.object_entries.push
+                tx_stream_builder.add_entry(to);
+                tx_stream_builder.0.borrow().object_entries.len() - 1
+            }
         };
         // resolve to
         let oe_opt = rx_stream_data
@@ -130,6 +136,7 @@ impl ReceiveStreamBuilder {
             .iter()
             .find(|oe| oe.0.borrow().name == to)
             .cloned();
+        let tx_stream_data = tx_stream_builder.0.borrow();
         let oe = match oe_opt {
             Some(oe) => {
                 assert_eq!(
