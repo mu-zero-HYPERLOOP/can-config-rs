@@ -123,6 +123,9 @@ impl ReceiveStreamBuilder {
             Some(pos) => pos,
             None => {
                 //tx_stream_data.object_entries.push
+                let tx_node = tx_stream_builder.0.borrow().tx_node.clone();
+                let oe = rx_stream_data.rx_node.0.borrow().object_entries.iter().find(|oe| oe.0.borrow().name == from).expect(&format!("failed to infer type of {from}")).clone();
+                tx_node.create_object_entry(to, &oe.0.borrow().ty);
                 tx_stream_builder.add_entry(to);
                 tx_stream_builder.0.borrow().object_entries.len() - 1
             }
