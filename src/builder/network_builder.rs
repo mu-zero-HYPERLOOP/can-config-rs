@@ -136,6 +136,7 @@ impl NetworkBuilder {
         set_resp_message.__assign_to_configuration();
         let set_resp_format = set_resp_message.make_type_format();
         let set_resp_header = network_builder.define_struct("set_resp_header");
+        set_resp_header.add_attribute(oe_index_name, "u13").unwrap();
         set_resp_header.add_attribute(client_id_name, "u8").unwrap();
         set_resp_header.add_attribute(server_id_name, "u8").unwrap();
         set_resp_header
