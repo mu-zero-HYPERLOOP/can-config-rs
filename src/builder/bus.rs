@@ -13,11 +13,11 @@ pub struct BusData {
 }
 
 impl BusBuilder {
-    pub fn new(name : &str, id : u32) -> Self {
+    pub fn new(name : &str, id : u32, baudrate: Option<u32>) -> Self {
         BusBuilder(make_builder_ref(BusData {
             name : name.to_owned(),
             id,
-            baudrate : 1000000,
+            baudrate : baudrate.unwrap_or(1000000),
             expected_utilization : 0,
         }))
     }

@@ -55,7 +55,7 @@ impl NodeBuilder {
                 bus
             }
             None => {
-                let bus = node_data.network_builder.create_bus(bus_name);
+                let bus = node_data.network_builder.create_bus(bus_name, None);
                 node_data.buses.push(bus.clone());
                 bus
             }

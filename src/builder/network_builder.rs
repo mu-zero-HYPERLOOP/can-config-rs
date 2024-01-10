@@ -156,16 +156,12 @@ impl NetworkBuilder {
 
         network_builder
     }
-    pub fn create_bus(&self, name: &str) -> BusBuilder {
+    pub fn create_bus(&self, name: &str, baudrate: Option<u32>) -> BusBuilder {
         let network_data = self.0.borrow_mut();
         let id = network_data.buses.borrow().len();
-        let bus = BusBuilder::new(name, id as u32);
+        let bus = BusBuilder::new(name, id as u32, baudrate);
         network_data.buses.borrow_mut().push(bus.clone());
         bus
-    }
-    pub fn set_baudrate(&self, baudrate: u32) {
-        let mut network_data = self.0.borrow_mut();
-        network_data.baudrate = Some(baudrate);
     }
 
     pub fn create_message(
@@ -570,7 +566,7 @@ impl NetworkBuilder {
 
         if self.0.borrow().buses.borrow().is_empty() {
             // ensure that there is always at least one bus defined!
-            self.create_bus("can0");
+            self.create_bus("can0", None);
         }
         let builder = self.0.borrow();
         let baudrate = builder.baudrate.unwrap_or(1000000);

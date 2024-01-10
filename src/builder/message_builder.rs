@@ -131,7 +131,7 @@ impl MessageBuilder {
                 bus
             }
             None => {
-                let bus = message_data.network_builder.create_bus(bus_name);
+                let bus = message_data.network_builder.create_bus(bus_name, None);
                 message_data.bus = Some(bus.clone());
                 bus
             }
