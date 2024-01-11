@@ -57,7 +57,7 @@ impl StreamBuilder {
     // max : max time between two messages
     // min : min time between two messages
     pub fn set_interval(&self, min : Duration, max : Duration) {
-        assert!(min.as_micros() < max.as_micros());
+        assert!(min.as_micros() <= max.as_micros());
         self.0.borrow_mut().interval = (min, max);
     }
     pub fn hide(&self) {
