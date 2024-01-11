@@ -562,6 +562,7 @@ impl NetworkBuilder {
         }
         let heartbeat_message = self.create_message("heartbeat", Some(Duration::from_millis(100)));
         heartbeat_message.__assign_to_heartbeat();
+        heartbeat_message.set_any_std_id(MessagePriority::SuperLow);
         let heartbeat_message_format = heartbeat_message.make_type_format();
         heartbeat_message_format.add_type("node_id", "node_id");
         for node_builder in self.0.borrow().nodes.borrow().iter() {
@@ -618,6 +619,7 @@ impl NetworkBuilder {
                     }else {
                         (max_entry as f64).log2().floor() as u8 + 1
                     };
+                    println!("enum size = {size}");
                     make_config_ref(Type::Enum {
                         name: enum_data.name.clone(),
                         size,
@@ -665,7 +667,7 @@ impl NetworkBuilder {
                 MessageIdTemplate::StdId(id) => MessageId::StandardId(id),
                 MessageIdTemplate::ExtId(id) => MessageId::ExtendedId(id),
                 MessageIdTemplate::AnyStd(_) => panic!("unresolved id"),
-                MessageIdTemplate::AnyExt(_) => panic!("unresolve id"),
+                MessageIdTemplate::AnyExt(_) => panic!("unresolved id"),
                 MessageIdTemplate::AnyAny(_) => panic!("unresolved id"),
             };
             let (signals, encoding) = match &message_data.format {
@@ -737,12 +739,11 @@ impl NetworkBuilder {
                             Type::Enum {
                                 name: enum_name,
                                 description: _,
-                                size: _,
-                                entries,
+                                size,
+                                entries : _,
                                 visibility: _,
                             } => {
-                                let max = entries.iter().map(|(_, y)| *y).max().unwrap_or(0);
-                                let size = (max as f64).log2().ceil() as u8;
+                                let size = *size;
                                 let signal = make_config_ref(Signal::new(
                                     &format!("{prefix}_{enum_name}"),
                                     None,
