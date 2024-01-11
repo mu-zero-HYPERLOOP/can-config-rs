@@ -72,6 +72,9 @@ impl Network {
     pub fn set_req_message(&self) -> &MessageRef {
         &self.set_req_message
     }
+    pub fn heartbeat_message(&self) -> &MessageRef {
+        &self.heartbeat_message
+    }
 }
 
 impl Display for Network {
