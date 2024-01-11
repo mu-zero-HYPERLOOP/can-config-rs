@@ -612,7 +612,12 @@ impl NetworkBuilder {
                         }
                     }
 
-                    let size = ((max_entry + 1) as f64).log2().ceil() as u8;
+
+                    let size = if max_entry == 0 {
+                        1
+                    }else {
+                        (max_entry as f64).log2().floor() as u8 + 1
+                    };
                     make_config_ref(Type::Enum {
                         name: enum_data.name.clone(),
                         size,
