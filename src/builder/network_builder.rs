@@ -5,25 +5,24 @@ use std::{
 };
 
 use crate::{
+    builder::message_resolution_protocol::resolve_ids_filters_and_buses,
     config::{
         self,
         bus::BusRef,
         encoding::{CompositeSignalEncoding, PrimitiveSignalEncoding},
         make_config_ref,
+        message::MessageUsage,
         signal::Signal,
         stream::Stream,
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
-        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding, message::MessageUsage,
+        ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding,
     },
-    errors::{self}, builder::message_resolution_protocol::resolve_ids_filters_and_buses,
+    errors::{self},
 };
 
 use super::{
-    bus::BusBuilder,
-    make_builder_ref,
-    message_builder::MessageIdTemplate,
-    BuilderRef, EnumBuilder, MessageBuilder, MessageFormat, NodeBuilder, StructBuilder,
-    TypeBuilder, MessagePriority,
+    bus::BusBuilder, make_builder_ref, message_builder::MessageIdTemplate, BuilderRef, EnumBuilder,
+    MessageBuilder, MessageFormat, MessagePriority, NodeBuilder, StructBuilder, TypeBuilder,
 };
 
 #[derive(Debug, Clone)]
@@ -69,8 +68,7 @@ impl NetworkBuilder {
         set_resp_erno.add_entry("Success", Some(0)).unwrap();
         set_resp_erno.add_entry("Error", Some(1)).unwrap();
 
-        let get_req_message =
-            network_builder.create_message("get_req", None);
+        let get_req_message = network_builder.create_message("get_req", None);
         get_req_message.set_any_std_id(MessagePriority::Low);
         get_req_message.__assign_to_configuration();
         let get_req_format = get_req_message.make_type_format();
@@ -86,8 +84,7 @@ impl NetworkBuilder {
             .set(get_req_message)
             .unwrap();
 
-        let get_resp_message =
-            network_builder.create_message("get_resp", None);
+        let get_resp_message = network_builder.create_message("get_resp", None);
         get_resp_message.set_any_std_id(MessagePriority::Low);
         get_resp_message.__assign_to_configuration();
         let get_resp_format = get_resp_message.make_type_format();
@@ -107,8 +104,7 @@ impl NetworkBuilder {
             .set(get_resp_message)
             .unwrap();
 
-        let set_req_message =
-            network_builder.create_message("set_req", None);
+        let set_req_message = network_builder.create_message("set_req", None);
         set_req_message.set_any_std_id(MessagePriority::Low);
         set_req_message.__assign_to_configuration();
         let set_req_format = set_req_message.make_type_format();
@@ -128,8 +124,7 @@ impl NetworkBuilder {
             .set(set_req_message)
             .unwrap();
 
-        let set_resp_message =
-            network_builder.create_message("set_resp", None);
+        let set_resp_message = network_builder.create_message("set_resp", None);
         set_resp_message.set_any_std_id(MessagePriority::Low);
         set_resp_message.__assign_to_configuration();
         let set_resp_format = set_resp_message.make_type_format();
@@ -168,11 +163,7 @@ impl NetworkBuilder {
         expected_interval: Option<Duration>,
     ) -> MessageBuilder {
         let network_data = self.0.borrow();
-        let message_builder = MessageBuilder::new(
-            name,
-            &self,
-            expected_interval
-        );
+        let message_builder = MessageBuilder::new(name, &self, expected_interval);
         network_data
             .messages
             .borrow_mut()
@@ -561,6 +552,21 @@ impl NetworkBuilder {
     }
 
     pub fn build(self) -> errors::Result<NetworkRef> {
+        // Generate Heartbeat messages!
+        let enum_node_id = self.define_enum("node_id");
+        let mut node_id = 0;
+        for node_builder in self.0.borrow().nodes.borrow().iter() {
+            let node_name = node_builder.0.borrow().name.clone();
+            enum_node_id.add_entry(&node_name, Some(node_id))?;
+            node_id += 1;
+        }
+        let heartbeat_message = self.create_message("heartbeat", Some(Duration::from_millis(100)));
+        let heartbeat_message_format = heartbeat_message.make_type_format();
+        heartbeat_message_format.add_type("node_id", "node_id");
+        for node_builder in self.0.borrow().nodes.borrow().iter() {
+            node_builder.add_tx_message(&heartbeat_message);
+            node_builder.add_rx_message(&heartbeat_message);
+        }
 
         if self.0.borrow().buses.borrow().is_empty() {
             // ensure that there is always at least one bus defined!
@@ -639,8 +645,8 @@ impl NetworkBuilder {
 
         let tmp_buses = builder.buses.borrow().clone();
         let tmp_messages = builder.messages.borrow().clone();
-        // we have to drop builder before we assign ids, because the following 
-        // function might require a mutable reference to self for assigning ids 
+        // we have to drop builder before we assign ids, because the following
+        // function might require a mutable reference to self for assigning ids
         // and buses!
         drop(builder);
         resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &types)?;
@@ -913,13 +919,12 @@ impl NetworkBuilder {
                     tx_message.clone(),
                     rx_message.clone(),
                     command_data.visibility.clone(),
-                    command_data.expected_interval.clone()
+                    command_data.expected_interval.clone(),
                 ));
                 rx_message.__set_usage(MessageUsage::CommandResp(command_ref.clone()));
                 tx_message.__set_usage(MessageUsage::CommandReq(command_ref.clone()));
 
                 commands.push(command_ref);
-
             }
 
             let mut object_entries = vec![];
@@ -1124,7 +1129,7 @@ impl NetworkBuilder {
                         mappings,
                         tx_stream.message().clone(),
                         rx_stream_data.visibility.clone(),
-                        *tx_stream.interval()
+                        *tx_stream.interval(),
                     )));
             }
         }
@@ -1145,15 +1150,32 @@ impl NetworkBuilder {
         for message in &messages {
             let once_cell = message.__get_usage();
             if once_cell.get().is_none() {
-                let expected = builder.messages.borrow().iter().find(|m| &m.0.borrow().name == message.name()).unwrap().0.borrow().usage.clone();
+                let expected = builder
+                    .messages
+                    .borrow()
+                    .iter()
+                    .find(|m| &m.0.borrow().name == message.name())
+                    .unwrap()
+                    .0
+                    .borrow()
+                    .usage
+                    .clone();
                 let interval = match expected {
-                    crate::builder::message_builder::MessageBuilderUsage::External { interval } => interval,
+                    crate::builder::message_builder::MessageBuilderUsage::External { interval } => {
+                        interval
+                    }
                     _ => panic!(),
-                }.unwrap_or(Duration::from_secs(60));
+                }
+                .unwrap_or(Duration::from_secs(60));
 
                 once_cell.set(MessageUsage::External { interval }).unwrap();
             }
         }
+
+        let heartbeat_message = messages
+            .iter()
+            .find(|message| message.name() == "heartbeat")
+            .expect("heartbeat message was not defined").clone();
 
         Ok(make_config_ref(Network::new(
             chrono::Local::now(),
@@ -1164,6 +1186,7 @@ impl NetworkBuilder {
             get_resp_message,
             set_req_message,
             set_resp_message,
+            heartbeat_message,
             buses,
         )))
     }

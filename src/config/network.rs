@@ -15,6 +15,7 @@ pub struct Network {
     get_req_message : MessageRef,
     set_resp_message : MessageRef,
     set_req_message : MessageRef,
+    heartbeat_message : MessageRef,
     buses : Vec<BusRef>,
 }
 
@@ -28,6 +29,7 @@ impl Network {
         get_resp_message : MessageRef,
         set_req_message : MessageRef,
         set_resp_message : MessageRef,
+        heartbeat_message : MessageRef,
         buses : Vec<BusRef>,
     ) -> Network {
         Network {
@@ -39,6 +41,7 @@ impl Network {
             get_resp_message,
             set_req_message,
             set_resp_message,
+            heartbeat_message,
             buses
         }
     }
