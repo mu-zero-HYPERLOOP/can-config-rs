@@ -31,7 +31,6 @@ pub struct NetworkBuilder(pub BuilderRef<NetworkData>);
 
 #[derive(Debug)]
 pub struct NetworkData {
-    pub baudrate: Option<u32>,
     pub messages: BuilderRef<Vec<MessageBuilder>>,
     pub types: BuilderRef<Vec<TypeBuilder>>,
     pub nodes: BuilderRef<Vec<NodeBuilder>>,
@@ -45,7 +44,6 @@ pub struct NetworkData {
 impl NetworkBuilder {
     pub fn new() -> NetworkBuilder {
         let network_builder = NetworkBuilder(make_builder_ref(NetworkData {
-            baudrate: None,
             messages: make_builder_ref(vec![]),
             types: make_builder_ref(vec![]),
             nodes: make_builder_ref(vec![]),
@@ -569,7 +567,6 @@ impl NetworkBuilder {
             self.create_bus("can0", None);
         }
         let builder = self.0.borrow();
-        let baudrate = builder.baudrate.unwrap_or(1000000);
 
         let buses: Vec<BusRef> = builder
             .buses
@@ -1159,7 +1156,6 @@ impl NetworkBuilder {
         }
 
         Ok(make_config_ref(Network::new(
-            baudrate,
             chrono::Local::now(),
             nodes,
             messages,

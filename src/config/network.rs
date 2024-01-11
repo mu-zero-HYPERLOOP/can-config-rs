@@ -8,7 +8,6 @@ pub type NetworkRef = ConfigRef<Network>;
 #[derive(Debug)]
 pub struct Network {
     build_time: chrono::DateTime<chrono::Local>,
-    baudrate: u32,
     nodes: Vec<NodeRef>,
     messages: Vec<MessageRef>,
     types: Vec<TypeRef>,
@@ -21,7 +20,6 @@ pub struct Network {
 
 impl Network {
     pub fn new(
-        baudrate: u32,
         build_time: chrono::DateTime<chrono::Local>,
         nodes: Vec<NodeRef>,
         messages: Vec<MessageRef>,
@@ -35,7 +33,6 @@ impl Network {
         Network {
             types,
             build_time,
-            baudrate,
             nodes,
             messages,
             get_req_message,
@@ -53,9 +50,6 @@ impl Network {
     }
     pub fn messages(&self) -> &Vec<MessageRef> {
         &self.messages
-    }
-    pub fn baudrate(&self) -> u32 {
-        self.baudrate
     }
     pub fn build_time(&self) -> &chrono::DateTime<chrono::Local> {
         &self.build_time
@@ -85,7 +79,10 @@ impl Display for Network {
         let s4 = format!("{s2}{s2}");
         let s5 = format!("{s4}{s1}");
         writeln!(f, "Network:")?;
-        writeln!(f, "{s1}baudrate : {}", self.baudrate)?;
+        writeln!(f, "{s1}busses:")?;
+        for bus in &self.buses {
+            writeln!(f, "{s1}id : {} baudrate : {}", bus.id(), bus.baudrate())?;
+        }
         writeln!(f, "{s1}build_time : {}", self.build_time)?;
         writeln!(f, "{s1}types:")?;
         for ty in &self.types {
