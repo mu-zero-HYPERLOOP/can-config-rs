@@ -79,12 +79,12 @@ impl Display for Network {
         let s4 = format!("{s2}{s2}");
         let s5 = format!("{s4}{s1}");
         writeln!(f, "Network:")?;
+        writeln!(f, "{s1}build_time : {}", self.build_time)?;
         writeln!(f, "{s1}busses:")?;
         for bus in &self.buses {
             writeln!(f, "{s2}{}", bus.id())?;
             writeln!(f, "{s3}baudrate : {}", bus.baudrate())?;
         }
-        writeln!(f, "{s1}build_time : {}", self.build_time)?;
         writeln!(f, "{s1}types:")?;
         for ty in &self.types {
             let vis = match ty as &Type {
