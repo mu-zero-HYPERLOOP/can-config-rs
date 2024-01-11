@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Duration, cell::OnceCell, sync::OnceLock};
+use std::{fmt::Display, time::Duration, sync::OnceLock};
 
 use super::{ConfigRef, MessageEncoding, SignalRef, Visibility, bus::BusRef, stream::StreamRef, CommandRef};
 
@@ -12,6 +12,7 @@ pub enum MessageUsage {
     GetReq,
     SetResp,
     SetReq,
+    Heartbeat,
     External{interval : Duration},
 }
 

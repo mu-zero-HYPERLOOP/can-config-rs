@@ -36,6 +36,7 @@ pub enum MessageBuilderUsage {
     CommandReq(CommandBuilder),
     CommandResp(CommandBuilder),
     Configuration,
+    Heartbeat,
     External{interval : Option<Duration>},
 }
 
@@ -148,6 +149,9 @@ impl MessageBuilder {
     }
     pub fn __assign_to_configuration(&self) {
         self.0.borrow_mut().usage = MessageBuilderUsage::Configuration;
+    }
+    pub fn __assign_to_heartbeat(&self) {
+        self.0.borrow_mut().usage = MessageBuilderUsage::Heartbeat;
     }
     pub fn hide(&self) {
         let mut message_data = self.0.borrow_mut();

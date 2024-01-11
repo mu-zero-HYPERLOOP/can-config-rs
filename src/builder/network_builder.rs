@@ -561,6 +561,7 @@ impl NetworkBuilder {
             node_id += 1;
         }
         let heartbeat_message = self.create_message("heartbeat", Some(Duration::from_millis(100)));
+        heartbeat_message.__assign_to_heartbeat();
         let heartbeat_message_format = heartbeat_message.make_type_format();
         heartbeat_message_format.add_type("node_id", "node_id");
         for node_builder in self.0.borrow().nodes.borrow().iter() {

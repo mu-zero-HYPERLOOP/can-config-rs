@@ -373,6 +373,7 @@ impl MessageSet {
                 // properly
                 interval.unwrap_or(Duration::from_millis(50)) 
             }
+            MessageBuilderUsage::Heartbeat => Duration::from_millis(100),
         };
         // println!("dlc = {dlc}");
         // println!("interval = {interval:?}");
@@ -1208,8 +1209,8 @@ mod tests {
         let network_builder = NetworkBuilder::new();
         network_builder.create_node("secu");
         network_builder.create_node("becu");
-        network_builder.create_bus("can1");
-        network_builder.create_bus("can2");
+        network_builder.create_bus("can1", Some(1000000));
+        network_builder.create_bus("can2", Some(1000000));
 
         let secu_to_becu = network_builder.create_message("secu_to_becu", None);
         secu_to_becu.set_any_std_id(MessagePriority::Low);
