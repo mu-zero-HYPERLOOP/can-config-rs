@@ -1164,6 +1164,9 @@ impl NetworkBuilder {
                 let interval = match expected {
                     crate::builder::message_builder::MessageBuilderUsage::External { interval } => {
                         interval
+                    },
+                    crate::builder::message_builder::MessageBuilderUsage::Heartbeat => {
+                        Some(Duration::from_millis(100))
                     }
                     _ => panic!(),
                 }

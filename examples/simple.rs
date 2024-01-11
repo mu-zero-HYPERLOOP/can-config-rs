@@ -5,7 +5,7 @@ extern crate can_config_rs;
 
 fn main() {
     let network_builder = can_config_rs::builder::NetworkBuilder::new();
-    let bus = network_builder.create_bus("100");
+    let bus = network_builder.create_bus("100", None);
     bus.baudrate(1000000);
     let secu = network_builder.create_node("secu");
     let xyz = secu.create_stream("xyz");
