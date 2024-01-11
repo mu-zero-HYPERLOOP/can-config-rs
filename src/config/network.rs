@@ -81,7 +81,8 @@ impl Display for Network {
         writeln!(f, "Network:")?;
         writeln!(f, "{s1}busses:")?;
         for bus in &self.buses {
-            writeln!(f, "{s1}id : {} baudrate : {}", bus.id(), bus.baudrate())?;
+            writeln!(f, "{s2}{}", bus.id())?;
+            writeln!(f, "{s3}baudrate : {}", bus.baudrate())?;
         }
         writeln!(f, "{s1}build_time : {}", self.build_time)?;
         writeln!(f, "{s1}types:")?;
