@@ -22,6 +22,7 @@ pub mod stream_builder;
 pub mod type_builder;
 pub mod bus;
 mod message_resolution_protocol;
+mod import_dbc;
 
 type BuilderRef<T> = Rc<RefCell<T>>;
 

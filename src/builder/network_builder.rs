@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    errors::Result,
     builder::message_resolution_protocol::resolve_ids_filters_and_buses,
     config::{
         self,
@@ -22,7 +23,7 @@ use crate::{
 
 use super::{
     bus::BusBuilder, make_builder_ref, message_builder::MessageIdTemplate, BuilderRef, EnumBuilder,
-    MessageBuilder, MessageFormat, MessagePriority, NodeBuilder, StructBuilder, TypeBuilder,
+    MessageBuilder, MessageFormat, MessagePriority, NodeBuilder, StructBuilder, TypeBuilder, import_dbc::import_dbc,
 };
 
 #[derive(Debug, Clone)]
@@ -149,6 +150,11 @@ impl NetworkBuilder {
 
         network_builder
     }
+
+    pub fn include_dbc(&self, bus : &str, dbc_path : &str) -> Result<()> {
+        import_dbc(self, bus, dbc_path)
+    }
+
     pub fn create_bus(&self, name: &str, baudrate: Option<u32>) -> BusBuilder {
         let network_data = self.0.borrow_mut();
         let id = network_data.buses.borrow().len();
