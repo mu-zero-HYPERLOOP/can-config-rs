@@ -21,7 +21,7 @@ pub mod object_entry_builder;
 pub mod stream_builder;
 pub mod type_builder;
 pub mod bus;
-mod message_resolution_protocol;
+mod message_resolution;
 mod import_dbc;
 
 type BuilderRef<T> = Rc<RefCell<T>>;

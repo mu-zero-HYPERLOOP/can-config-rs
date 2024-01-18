@@ -16,6 +16,19 @@ pub enum MessagePriority {
     SuperLow,
 }
 impl MessagePriority {
+    pub fn from_u32(i : u32) -> MessagePriority {
+        if i == 0 {
+            MessagePriority::Realtime
+        }else if i == 1 {
+            MessagePriority::High
+        }else if i == 2{
+            MessagePriority::Normal
+        }else if i == 3 {
+            MessagePriority::Low
+        }else {
+            MessagePriority::SuperLow
+        }
+    }
     pub fn to_u32(&self) -> u32 {
         match &self {
             MessagePriority::Realtime => 0,
@@ -25,7 +38,7 @@ impl MessagePriority {
             MessagePriority::SuperLow => 4,
         }
     }
-    pub fn count() -> u32 {
+    pub const fn count() -> usize {
         5
     }
 }

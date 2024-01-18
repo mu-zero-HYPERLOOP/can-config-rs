@@ -6,7 +6,6 @@ use std::{
 
 use crate::{
     errors::Result,
-    builder::message_resolution_protocol::resolve_ids_filters_and_buses,
     config::{
         self,
         bus::BusRef,
@@ -18,7 +17,7 @@ use crate::{
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
         ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding,
     },
-    errors::{self},
+    errors::{self}, builder::message_resolution::resolve_ids_filters_and_buses,
 };
 
 use super::{
