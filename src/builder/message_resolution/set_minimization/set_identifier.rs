@@ -7,8 +7,7 @@ use std::fmt::Debug;
 pub struct SetIdentifier {
     receivers: Vec<NodeBuilder>,
     bus: Option<u32>,
-    ide: Option<bool>,
-    id : Option<u32>,
+    ide: bool,
     hashcode: u64,
 }
 
@@ -16,8 +15,7 @@ impl SetIdentifier {
     pub fn new(
         receivers: &Vec<NodeBuilder>,
         bus: Option<u32>,
-        ide: Option<bool>,
-        id : Option<u32>,
+        ide: bool,
     ) -> Self {
         let mut receivers = receivers.clone();
         receivers.sort_by_key(|r| r.0.borrow().name.clone());
@@ -27,29 +25,21 @@ impl SetIdentifier {
         }
         bus.hash(&mut hasher);
         ide.hash(&mut hasher);
-        id.hash(&mut hasher);
         Self {
             receivers,
             bus,
             ide,
             hashcode : hasher.finish(),
-            id,
         }
     }
     pub fn bus(&self) -> &Option<u32> {
         &self.bus
     }
-    pub fn ide(&self) -> &Option<bool> {
-        &self.ide
-    }
-    pub fn id(&self) -> &Option<u32> {
-        &self.id
+    pub fn ide(&self) -> bool {
+        self.ide
     }
     pub fn receivers(&self) -> &Vec<NodeBuilder> {
         &self.receivers
-    }
-    pub fn compressable(&self) -> bool {
-        self.id.is_none()
     }
 }
 
@@ -70,9 +60,6 @@ impl PartialEq for SetIdentifier {
         if other.ide != self.ide {
             return false;
         }
-        if other.id != self.id {
-            return false;
-        }
         for (a,b) in std::iter::zip(other.receivers.iter(), self.receivers.iter()) {
             let name_a = a.0.borrow().name.clone();
             if name_a != b.0.borrow().name {
@@ -91,15 +78,8 @@ impl Debug for SetIdentifier {
             write!(f, "{rx_name},")?;
         }
         write!(f, "]")?;
-        match self.ide {
-            Some(ide) => {
-                if ide {
-                    write!(f, "x")?;
-                }
-            }
-            None => {
-                write!(f, "?")?;
-            }
+        if self.ide {
+            write!(f, "x")?;
         }
         Ok(())
     }

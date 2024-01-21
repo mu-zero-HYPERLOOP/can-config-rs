@@ -1,57 +1,35 @@
 use crate::{errors, config::TypeRef};
 
-use self::filter_configuration::NodeFilterBank;
+use self::{filter_configuration::NodeFilterBank, fixed_messages::MessageSplit};
 
 use super::{MessageBuilder, bus::BusBuilder, NodeBuilder};
 
 
 mod set_minimization;
-mod set_assignment;
 mod receive_set;
 mod bus_balancing;
-mod setcode_optimization;
 mod assign_messages;
 mod filter_configuration;
 mod logging;
+mod fixed_messages;
 
-
-pub struct BusFilterBank {
-    node_filters : Vec<NodeFilterBank>,
-}
-
-impl BusFilterBank {
-    pub fn node_filters(&self) -> &Vec<NodeFilterBank> {
-        &self.node_filters
-    }
-    pub fn node_filter_of(&self, node_name : &str) -> Option<&NodeFilterBank>{
-        self.node_filters.iter().find(|nf| &nf.node().0.borrow().name == node_name)
-    }
-
-    pub fn node_filter_of_builder(&self, node_builder : &NodeBuilder) -> Option<&NodeFilterBank>{
-        let node_name = node_builder.0.borrow().name.clone();
-        self.node_filter_of(&node_name)
-    }
-}
 
 pub fn resolve_ids_filters_and_buses(
     buses: &Vec<BusBuilder>,
     messages: &Vec<MessageBuilder>,
+    nodes : &Vec<NodeBuilder>,
     types: &Vec<TypeRef>,
-) -> errors::Result<Vec<BusFilterBank>> {
+) -> errors::Result<Vec<NodeFilterBank>> {
     let log_info = logging::cache_logging_info(types ,messages);
-    let mut bus_filter_banks =  vec![];
-    let network_info = receive_set::generate_receive_sets_from_messages(messages);
-    let bus_infos = bus_balancing::balance_buses(network_info, types, buses);
-    for bus_info in bus_infos {
-        let minimized_bus = set_minimization::minimize_sets(bus_info);
-        let optimized_bus = setcode_optimization::optimize_sets(minimized_bus);
-        let assigned_bus = set_assignment::assign_setcodes(optimized_bus);
-        assign_messages::assign_messages(&assigned_bus);
-        let filters = filter_configuration::find_filter_configuration(&assigned_bus);
-        bus_filter_banks.push(BusFilterBank { node_filters: filters });
-    }
-    logging::log_info(log_info);
-    Ok(bus_filter_banks)
+    let message_split = MessageSplit::from(messages);
+    let network_info = receive_set::generate_receive_sets_from_messages(nodes, message_split.prio_messages());
+    let minimized_network = set_minimization::minimize_sets(network_info);
+    let filter_infos = assign_messages::assign_messages_ids(message_split.fixed_messages(), minimized_network, nodes);
+    bus_balancing::balance_buses(messages, types, buses);
+    let filter_banks = filter_configuration::find_filter_configuration(filter_infos);
+
+    // logging::log_info(log_info);
+    Ok(filter_banks)
 }
 
 
@@ -103,12 +81,18 @@ mod tests {
             x.set_any_std_id(priority);
             x.add_receiver(rx_node_name);
         }
-        let message_per_node = 100;
+        let message_per_node = 70;
         for _ in 0..message_per_node {
             create_test_message(&network_builder, "secu", &mut name_gen);
         }
         for _ in 0..message_per_node {
             create_test_message(&network_builder, "master", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "pdu24", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "pdu12", &mut name_gen);
         }
         for _ in 0..message_per_node {
             create_test_message(&network_builder, "becu", &mut name_gen);
@@ -118,15 +102,54 @@ mod tests {
             create_test_message(&network_builder, "clu", &mut name_gen);
         }
 
-        let fixed = network_builder.create_message("fixed_secu1", None);
-        fixed.set_std_id(0xFF);
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu1", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu2", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu3", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu4", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu5", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "mlu6", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "motor1", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "motor2", &mut name_gen);
+        }
+
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "lgu1", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "lgu2", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "lgu3", &mut name_gen);
+        }
+        for _ in 0..message_per_node {
+            create_test_message(&network_builder, "lgu4", &mut name_gen);
+        }
+
+
+        // let fixed = network_builder.create_message("fixed_secu1", None);
+        // fixed.set_std_id(0xFF);
         //
-        let fixed = network_builder.create_message("fixed_master", None);
-        fixed.set_std_id(0xFA);
+        // let fixed = network_builder.create_message("fixed_master", None);
+        // fixed.set_std_id(0xFA);
         //
         // let fixed = network_builder.create_message("fixed_clu", None);
         // fixed.set_std_id(0xFB);
-        
+        //
         // let fixed = network_builder.create_message("fixed_secu2", None);
         // fixed.set_std_id(0xFE);
         //

@@ -5,11 +5,16 @@ use crate::builder::message_resolution::set_minimization::MinimizedSet;
 use crate::builder::{MessageBuilder, MessagePriority, NetworkBuilder, NodeBuilder};
 use crate::config::{Type, TypeRef};
 
+use self::node_receive_set::NodeReceiveSet;
+
 use super::set_minimization::bucket_layout::{BucketLayout, BucketLayoutCommit};
 use super::set_minimization::priority_bucket::PriorityBucket;
 use super::set_minimization::set_identifier::SetIdentifier;
 
+pub mod node_receive_set;
+
 pub type ReceiverSetRef = Rc<ReceiverSet>;
+
 
 pub struct ReceiverSet {
     id: SetIdentifier,
@@ -18,6 +23,7 @@ pub struct ReceiverSet {
 
 pub struct NetworkInfo {
     receive_sets: Vec<ReceiverSetRef>,
+    node_receive_sets : Vec<NodeReceiveSet>,
     nodes: Vec<NodeBuilder>,
 }
 
@@ -27,6 +33,9 @@ impl NetworkInfo {
     }
     pub fn nodes(&self) -> &Vec<NodeBuilder> {
         &self.nodes
+    }
+    pub fn node_receive_sets(&self) -> &Vec<NodeReceiveSet> {
+        &self.node_receive_sets
     }
 }
 
@@ -44,9 +53,7 @@ impl ReceiverSet {
         match message.0.borrow().id {
             crate::builder::message_builder::MessageIdTemplate::StdId(_)
             | crate::builder::message_builder::MessageIdTemplate::ExtId(_) => {
-                assert!(!self.id.compressable()); // only allow fixed messages to be added to fixed
-                                                  // non compressable sets
-                self.priority_buckets[0].insert_message(message)
+                panic!("receive sets do not support fixed ids")
             }
             crate::builder::message_builder::MessageIdTemplate::AnyStd(prio)
             | crate::builder::message_builder::MessageIdTemplate::AnyExt(prio)
@@ -56,9 +63,6 @@ impl ReceiverSet {
         }
     }
     pub fn set_count(&self, bucket_layout: &BucketLayout) -> usize {
-        if !self.id.compressable() {
-            return 1;
-        }
         self.priority_buckets
             .iter()
             .enumerate()
@@ -72,9 +76,6 @@ impl ReceiverSet {
     }
 
     pub fn min_commit_to_merge(&self, bucket_layout: &BucketLayout) -> Option<BucketLayoutCommit> {
-        if !self.id.compressable() {
-            return None;
-        }
         let mut inc = [0usize; MessagePriority::count()];
         let set_count = self.set_count(bucket_layout);
         for prio in 0..MessagePriority::count() {
@@ -169,12 +170,8 @@ impl ReceiverSet {
                     }
                     crate::builder::MessageFormat::Empty => 0usize,
                 };
-                let ide = match self.identifier().ide() {
-                    Some(ide) => *ide,
-                    None => true,
-                };
                 let max_bitlen: usize;
-                if ide {
+                if self.identifier().ide() {
                     max_bitlen = 8 * dlc + 64 + (54 + 8 * dlc - 1) / 4;
                 } else {
                     max_bitlen = 8 * dlc + 44 + (34 + 8 * dlc - 1) / 4;
@@ -206,21 +203,21 @@ impl ReceiverSet {
     }
 }
 
-pub fn generate_receive_sets_from_messages(messages: &Vec<MessageBuilder>) -> NetworkInfo {
+pub fn generate_receive_sets_from_messages(nodes : &Vec<NodeBuilder>, messages: &Vec<MessageBuilder>) -> NetworkInfo {
     let mut receiver_sets: Vec<ReceiverSet> = vec![];
     let mut rx_nodes: Vec<NodeBuilder> = vec![];
     for message in messages {
         let bus = message.0.borrow().bus.clone().map(|bus| bus.0.borrow().id);
-        let (ide, id) = match message.0.borrow().id {
-            crate::builder::message_builder::MessageIdTemplate::StdId(id) => {
-                (Some(false), Some(id))
+        let ide = match message.0.borrow().id {
+            crate::builder::message_builder::MessageIdTemplate::StdId(_) |
+            crate::builder::message_builder::MessageIdTemplate::ExtId(_) => {
+                panic!("receive sets do not support fixed ids")
             }
-            crate::builder::message_builder::MessageIdTemplate::ExtId(id) => (Some(true), Some(id)),
-            crate::builder::message_builder::MessageIdTemplate::AnyStd(_) => (Some(false), None),
-            crate::builder::message_builder::MessageIdTemplate::AnyExt(_) => (Some(true), None),
-            crate::builder::message_builder::MessageIdTemplate::AnyAny(_) => (None, None),
+            crate::builder::message_builder::MessageIdTemplate::AnyStd(_) => false,
+            crate::builder::message_builder::MessageIdTemplate::AnyExt(_) => true,
+            crate::builder::message_builder::MessageIdTemplate::AnyAny(_) => panic!("receive sets do not support AnyAny id templates"),
         };
-        let set_identifier = SetIdentifier::new(&message.0.borrow().receivers, bus, ide, id);
+        let set_identifier = SetIdentifier::new(&message.0.borrow().receivers, bus, ide);
         for rx in &message.0.borrow().receivers {
             let rx_name: String = rx.0.borrow().name.clone();
             if !rx_nodes.iter().any(|node| node.0.borrow().name == rx_name) {
@@ -245,8 +242,29 @@ pub fn generate_receive_sets_from_messages(messages: &Vec<MessageBuilder>) -> Ne
         .map(|rx_set| Rc::new(rx_set))
         .collect();
 
+    let node_receive_sets = 
+                nodes
+                .iter()
+                .map(|node| {
+                    let node_name = node.0.borrow().name.clone();
+                    let rx_sets: Vec<ReceiverSetRef> = receiver_sets
+                        .iter()
+                        .map(|rx_set| rx_set.clone())
+                        .filter(|rx_set| {
+                            rx_set
+                                .identifier()
+                                .receivers()
+                                .iter()
+                                .any(|rx| rx.0.borrow().name == node_name)
+                        })
+                        .collect();
+                    NodeReceiveSet::new(node_name, rx_sets)
+                })
+                .collect();
+
     NetworkInfo {
         receive_sets: receiver_sets,
-        nodes: rx_nodes,
+        nodes : nodes.clone(),
+        node_receive_sets
     }
 }

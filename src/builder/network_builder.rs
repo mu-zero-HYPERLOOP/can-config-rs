@@ -564,8 +564,9 @@ impl NetworkBuilder {
         // we have to drop builder before we assign ids, because the following
         // function might require a mutable reference to self for assigning ids
         // and buses!
+        let nodes = builder.nodes.borrow().clone();
         drop(builder);
-        resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &types)?;
+        resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &nodes, &types)?;
         let builder = self.0.borrow();
 
         let mut messages = vec![];
