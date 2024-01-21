@@ -1,16 +1,14 @@
-use std::rc::Rc;
 
-use super::{receiver_set::ReceiverSet, bucket_layout::BucketLayout};
-
+use crate::builder::message_resolution::{receive_set::ReceiverSetRef, set_minimization::bucket_layout::BucketLayout};
 
 
 pub struct NodeReceiveSet {
     node_name : String,
-    receiver_sets : Vec<Rc<ReceiverSet>>
+    receiver_sets : Vec<ReceiverSetRef>
 }
 
 impl NodeReceiveSet {
-    pub fn new(node_name : String, receiver_sets : Vec<Rc<ReceiverSet>>) -> Self{
+    pub fn new(node_name : String, receiver_sets : Vec<ReceiverSetRef>) -> Self{
         Self {
             node_name,
             receiver_sets,
@@ -19,7 +17,7 @@ impl NodeReceiveSet {
     pub fn node_name(&self) -> &str {
         &self.node_name
     }
-    pub fn receive_sets(&self) -> &Vec<Rc<ReceiverSet>> {
+    pub fn receive_sets(&self) -> &Vec<ReceiverSetRef> {
         &self.receiver_sets
     }
     pub fn receive_set_count(&self, bucket_layout : &BucketLayout) -> usize {

@@ -228,7 +228,7 @@ impl NetworkBuilder {
 }
 
 impl NetworkBuilder {
-    fn resolve_type(
+    pub fn resolve_type(
         defined_types: &Vec<TypeRef>,
         type_name: &str,
     ) -> errors::Result<ConfigRef<Type>> {
@@ -322,103 +322,6 @@ impl NetworkBuilder {
             "failed to resolve type : {type_name:?}"
         )));
     }
-
-    // fn type_to_signals(
-    //     ty: TypeRef,
-    //     message_name: &str,
-    //     value_name: &str,
-    //     type_name: &str,
-    //     offset: &mut usize,
-    // ) -> Vec<SignalRef> {
-    //     let mut type_signals = vec![];
-    //     match &ty as &Type {
-    //         Type::Primitive(signal_type) => {
-    //             type_signals.push(make_config_ref(Signal {
-    //                 name: format!("{}_{}_field", message_name, value_name),
-    //                 description: Some(format!(
-    //                     "{} of type {} in message {}",
-    //                     value_name, type_name, message_name
-    //                 )),
-    //                 ty: signal_type.clone(),
-    //                 value_table: None,
-    //                 offset: *offset,
-    //             }));
-    //             *offset += signal_type.size() as usize;
-    //         }
-    //         Type::Struct {
-    //             name,
-    //             description: _,
-    //             attribs,
-    //             visibility: _,
-    //         } => {
-    //             for (attrib_name, attrib_type) in attribs {
-    //                 let attrib_signals = Self::type_to_signals(
-    //                     attrib_type.clone(),
-    //                     message_name,
-    //                     value_name,
-    //                     name,
-    //                     &mut 0,
-    //                 );
-    //                 for signal in attrib_signals {
-    //                     type_signals.push(make_config_ref(Signal {
-    //                         name: format!(
-    //                             "{}_{}_{}_{}",
-    //                             message_name, value_name, name, signal.name
-    //                         ),
-    //                         description: Some(format!(
-    //                             "for message {} argument {} attribute {} of struct {}",
-    //                             message_name, value_name, attrib_name, name
-    //                         )),
-    //                         offset: *offset,
-    //                         ty: signal.ty.clone(),
-    //                         value_table: signal.value_table.clone(),
-    //                     }));
-    //                     *offset += signal.ty.size() as usize;
-    //                 }
-    //             }
-    //         }
-    //         Type::Enum {
-    //             name,
-    //             size,
-    //             description: _,
-    //             entries,
-    //             visibility: _,
-    //         } => {
-    //             let value_table = make_config_ref(ValueTable(entries.clone()));
-    //             type_signals.push(make_config_ref(Signal {
-    //                 name: format!("{}_{}value", message_name, value_name),
-    //                 description: Some(format!(
-    //                     "{} of type {} in message {}",
-    //                     value_name, name, message_name
-    //                 )),
-    //                 ty: SignalType::UnsignedInt { size: *size },
-    //                 value_table: Some(value_table),
-    //                 offset: 0,
-    //             }));
-    //         }
-    //         Type::Array { len, ty } => {
-    //             let inner_signals =
-    //                 Self::type_to_signals(ty.clone(), message_name, value_name, type_name, &mut 0);
-    //             for i in 0..*len {
-    //                 for inner_signal in &inner_signals {
-    //                     type_signals.push(make_config_ref(Signal {
-    //                         name: format!("{}_{}_{}_field", message_name, value_name, i),
-    //                         description: Some(format!(
-    //                             "{} of type {} at index {} in message {}",
-    //                             value_name, type_name, i, message_name
-    //                         )),
-    //                         ty: inner_signal.ty.clone(),
-    //                         value_table: inner_signal.value_table.clone(),
-    //                         offset: *offset,
-    //                     }));
-    //                     *offset += inner_signal.ty().size() as usize;
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     type_signals
-    // }
 
     fn topo_sort_types(types: &Vec<TypeRef>) -> Vec<TypeRef> {
         let n = types.len();
