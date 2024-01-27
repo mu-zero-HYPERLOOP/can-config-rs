@@ -115,7 +115,9 @@ impl NodeBuilder {
     }
 
     pub fn receive_stream(&self, tx_node_name: &str, tx_stream_name: &str) -> ReceiveStreamBuilder {
+        println!("node:: receive stream tx_node_name : {tx_node_name}");
         let node_data = self.0.borrow();
+        println!("node:: receive stream self_name : {}", node_data.name);
         if tx_node_name == node_data.name {
             panic!("can't receive local stream");
         }
@@ -149,9 +151,8 @@ impl NodeBuilder {
         self.add_rx_message(&tx_stream_data.message);
         drop(tx_stream_data);
 
-
-        let mut node_data = self.0.borrow_mut();
         let rx_stream_builder = ReceiveStreamBuilder::new(tx_stream, self.clone());
+        let mut node_data = self.0.borrow_mut();
         node_data.rx_streams.push(rx_stream_builder.clone());
 
 

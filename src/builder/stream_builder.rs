@@ -2,8 +2,10 @@ use std::time::Duration;
 
 use crate::config::Visibility;
 
-use super::{NodeBuilder, make_builder_ref, BuilderRef, MessageBuilder, MessageTypeFormatBuilder, ObjectEntryBuilder, MessagePriority};
-
+use super::{
+    make_builder_ref, BuilderRef, MessageBuilder, MessagePriority, MessageTypeFormatBuilder,
+    NodeBuilder, ObjectEntryBuilder,
+};
 
 #[derive(Debug, Clone)]
 pub struct StreamBuilder(pub BuilderRef<StreamData>);
@@ -16,7 +18,7 @@ pub struct StreamData {
     pub tx_node: NodeBuilder,
     pub object_entries: Vec<ObjectEntryBuilder>,
     pub visbility: Visibility,
-    pub interval : (Duration, Duration),
+    pub interval: (Duration, Duration),
 }
 
 #[derive(Debug, Clone)]
@@ -32,9 +34,10 @@ pub struct ReceiveStreamData {
 impl StreamBuilder {
     pub fn new(name: &str, node_builder: NodeBuilder) -> StreamBuilder {
         let node_data = node_builder.0.borrow();
-        let message = node_data
-            .network_builder
-            .create_message(&format!("{}_stream_{name}", node_builder.0.borrow().name), None);
+        let message = node_data.network_builder.create_message(
+            &format!("{}_stream_{name}", node_builder.0.borrow().name),
+            None,
+        );
         drop(node_data);
         node_builder.add_tx_message(&message);
         message.hide();
@@ -44,19 +47,19 @@ impl StreamBuilder {
         let new = StreamBuilder(make_builder_ref(StreamData {
             name: name.to_owned(),
             description: None,
-            message : message.clone(),
+            message: message.clone(),
             format,
             tx_node: node_builder,
             object_entries: vec![],
             visbility: Visibility::Global,
-            interval : (Duration::from_millis(50), Duration::from_millis(500)),
+            interval: (Duration::from_millis(50), Duration::from_millis(500)),
         }));
         message.__assign_to_stream(&new);
         new
     }
     // max : max time between two messages
     // min : min time between two messages
-    pub fn set_interval(&self, min : Duration, max : Duration) {
+    pub fn set_interval(&self, min: Duration, max: Duration) {
         assert!(min.as_micros() <= max.as_micros());
         self.0.borrow_mut().interval = (min, max);
     }
@@ -76,28 +79,32 @@ impl StreamBuilder {
             .object_entries
             .iter()
             .find(|oe| oe.0.borrow().name == name)
-            .cloned() {
-                Some(oe) => oe,
-                None => {
-                    drop(node_data);
-                    node.create_object_entry(name, "u1")
-                }
-            };
-            // .unwrap_or_else(|| node.create_object_entry(name, "u1"));
+            .cloned()
+        {
+            Some(oe) => oe,
+            None => {
+                drop(node_data);
+                node.create_object_entry(name, "u1")
+            }
+        };
+        // .unwrap_or_else(|| node.create_object_entry(name, "u1"));
         stream_data.object_entries.push(oe.clone());
         let oe_data = oe.0.borrow();
         stream_data.format.add_type(&oe_data.ty, &oe_data.name);
     }
-    pub fn set_priority(&self, priority : MessagePriority) {
+    pub fn set_priority(&self, priority: MessagePriority) {
         self.0.borrow().message.set_any_std_id(priority);
     }
-    pub fn set_priority_with_extended_id(&self, priority : MessagePriority) {
+    pub fn set_priority_with_extended_id(&self, priority: MessagePriority) {
         self.0.borrow().message.set_any_ext_id(priority);
     }
 }
 
 impl ReceiveStreamBuilder {
     pub fn new(stream_builder: StreamBuilder, rx_node: NodeBuilder) -> ReceiveStreamBuilder {
+        let rx_node_name = rx_node.0.borrow().name.clone();
+        println!("create receive builder : {rx_node_name}");
+        drop(rx_node_name);
         ReceiveStreamBuilder(make_builder_ref(ReceiveStreamData {
             stream_builder,
             rx_node,
@@ -114,24 +121,18 @@ impl ReceiveStreamBuilder {
         let mut rx_stream_data = self.0.borrow_mut();
         let tx_stream_builder = rx_stream_data.stream_builder.clone();
         let tx_stream_data = tx_stream_builder.0.borrow();
-        let opt_pos = tx_stream_data
+        let tx_node_name = tx_stream_data.tx_node.0.borrow().name.clone();
+        let tx_oe_pos = tx_stream_data
             .object_entries
             .iter()
-            .position(|oe| oe.0.borrow().name == from);
+            .position(|oe| oe.0.borrow().name == from)
+            .expect(&format!(
+                "{tx_node_name} doesn't define a object entry called {from}"
+            ));
+        let tx_oe = tx_stream_data.object_entries[tx_oe_pos].clone();
         drop(tx_stream_data);
-        let pos = match opt_pos {
-            Some(pos) => pos,
-            None => {
-                //tx_stream_data.object_entries.push
-                let tx_node = tx_stream_builder.0.borrow().tx_node.clone();
-                let oe = rx_stream_data.rx_node.0.borrow().object_entries.iter().find(|oe| oe.0.borrow().name == from).expect(&format!("failed to infer type of {from}")).clone();
-                tx_node.create_object_entry(to, &oe.0.borrow().ty);
-                tx_stream_builder.add_entry(to);
-                tx_stream_builder.0.borrow().object_entries.len() - 1
-            }
-        };
         // resolve to
-        let oe_opt = rx_stream_data
+        let rx_oe_opt = rx_stream_data
             .rx_node
             .0
             .borrow()
@@ -140,19 +141,21 @@ impl ReceiveStreamBuilder {
             .find(|oe| oe.0.borrow().name == to)
             .cloned();
         let tx_stream_data = tx_stream_builder.0.borrow();
-        let oe = match oe_opt {
-            Some(oe) => {
-                assert_eq!(
-                    oe.0.borrow().ty,
-                    tx_stream_data.object_entries[pos].0.borrow().ty
-                );
-                oe
+        let oe = match rx_oe_opt {
+            Some(rx_oe) => {
+                // explicit type check!
+                if rx_oe.0.borrow().ty != tx_oe.0.borrow().ty {
+                    panic!(
+                        "{tx_node_name}::{from} has a different type than {}::{to}",
+                        tx_stream_data.tx_node.0.borrow().name
+                    );
+                }
+                rx_oe
             }
-            None => {
-                let tx_oe = tx_stream_data.object_entries[pos].0.borrow();
-                rx_stream_data.rx_node.create_object_entry(to, &tx_oe.ty)
-            }
+            None => rx_stream_data
+                .rx_node
+                .create_object_entry(to, &tx_oe.0.borrow().ty),
         };
-        rx_stream_data.object_entries.push((pos, oe));
+        rx_stream_data.object_entries.push((tx_oe_pos, oe));
     }
 }
