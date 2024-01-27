@@ -23,16 +23,18 @@ struct SetCodeAllocator {
 impl SetCodeAllocator {
     pub fn new(setcode_len: u32) -> Self {
         Self {
-            avaiable_setcodes: HashSet::from_iter(0..(2u32).pow(setcode_len) - 1),
+            avaiable_setcodes: HashSet::from_iter(0..(2u32).pow(setcode_len)),
         }
     }
     pub fn is_avaiable(&self, setcode: u32) -> bool {
         self.avaiable_setcodes.contains(&setcode)
     }
     pub fn allocate_setcode(&mut self, setcode: u32) -> bool {
+        println!("allocate specific");
         self.avaiable_setcodes.remove(&setcode)
     }
     pub fn allocate_any(&mut self) -> Option<u32> {
+        println!("allocate any");
         let setcode = self.avaiable_setcodes.iter().nth(0).cloned()?;
         self.avaiable_setcodes.remove(&setcode);
         Some(setcode)

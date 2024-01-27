@@ -28,7 +28,7 @@ pub fn resolve_ids_filters_and_buses(
     bus_balancing::balance_buses(messages, types, buses);
     let filter_banks = filter_configuration::find_filter_configuration(filter_infos);
 
-    // logging::log_info(log_info);
+    logging::log_info(log_info);
     Ok(filter_banks)
 }
 
