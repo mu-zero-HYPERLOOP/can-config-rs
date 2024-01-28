@@ -1,9 +1,8 @@
 use self::set_identifier::SetIdentifier;
-use crate::builder::{
-        message_resolution::set_minimization::bucket_layout::BucketLayout,
-        MessageBuilder,
-    };
 use crate::builder::MessagePriority;
+use crate::builder::{
+    message_resolution::set_minimization::bucket_layout::BucketLayout, MessageBuilder,
+};
 
 use super::receive_set::NetworkInfo;
 
@@ -64,9 +63,25 @@ impl MinimizedNetwork {
  * messages is not allowed to contain messages with fixed id assignments!
  */
 
-pub fn minimize_sets(network_info : NetworkInfo) -> MinimizedNetwork {
+pub fn minimize_sets(network_info: NetworkInfo) -> MinimizedNetwork {
     if network_info.node_receive_sets().is_empty() {
-        panic!("Can't minimize the sets for a bus if all messages on the bus are not received at all!");
+        assert_eq!(network_info.receive_sets().len(), 1, "It is assumed that if no receiver exists in 
+                   the network that all messages are defined by the config itself are are std and non fixed");
+        let set = network_info.receive_sets().first().unwrap();
+        let mut bucket_layout = BucketLayout::new();
+
+        loop {
+            let Some(commit) = set.min_commit_to_merge(&bucket_layout) else {
+                break;
+            };
+            bucket_layout.apply_commit(commit);
+        }
+        assert!(bucket_layout.prio_bit_size() + 1 < STD_ID_LENGTH, "Failed to find message id configuration");
+        let minimized_sets = set.to_minimized_sets(&bucket_layout);
+        return MinimizedNetwork {
+            sets : minimized_sets,
+            bucket_layout,
+        };
     }
     println!("receive set count: {}", network_info.receive_sets().len());
 
@@ -84,12 +99,14 @@ pub fn minimize_sets(network_info : NetworkInfo) -> MinimizedNetwork {
         println!("-low         : {}", bucket_layout.bucket_size(3));
         println!("-super-low   : {}", bucket_layout.bucket_size(4));
 
-        let reducable_node = network_info.node_receive_sets()
+        let reducable_node = network_info
+            .node_receive_sets()
             .iter()
             .max_by_key(|node_rx_set| node_rx_set.receive_set_count(&bucket_layout))
             .expect("It was asserted that there exist at least one node receiver set");
 
-        let set_count: usize = network_info.receive_sets()
+        let set_count: usize = network_info
+            .receive_sets()
             .iter()
             .map(|rx_set| rx_set.set_count(&bucket_layout))
             .sum();
@@ -209,7 +226,8 @@ pub fn minimize_sets(network_info : NetworkInfo) -> MinimizedNetwork {
         }
     }
 
-    let total_set_count: usize = network_info.receive_sets()
+    let total_set_count: usize = network_info
+        .receive_sets()
         .iter()
         .map(|rx_set| rx_set.set_count(&bucket_layout))
         .sum();
@@ -227,7 +245,8 @@ pub fn minimize_sets(network_info : NetworkInfo) -> MinimizedNetwork {
     let total_priority_bits = (total_priority_count as f64).log2().ceil() as u32;
     println!("Priority bit count    : {total_priority_bits}");
 
-    let reducable_node = network_info.node_receive_sets()
+    let reducable_node = network_info
+        .node_receive_sets()
         .iter()
         .max_by_key(|node_rx_set| node_rx_set.receive_set_count(&bucket_layout))
         .expect("It was asserted that there exist at least one node receiver set");
@@ -238,7 +257,8 @@ pub fn minimize_sets(network_info : NetworkInfo) -> MinimizedNetwork {
     println!("Max filters: {max_filters}");
     println!("");
 
-    let minimized_sets: Vec<MinimizedSet> = network_info.receive_sets()
+    let minimized_sets: Vec<MinimizedSet> = network_info
+        .receive_sets()
         .iter()
         .map(|rx_set| rx_set.to_minimized_sets(&bucket_layout))
         .flatten()

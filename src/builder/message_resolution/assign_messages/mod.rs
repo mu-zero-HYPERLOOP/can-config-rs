@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::builder::{MessageBuilder, MessagePriority, NodeBuilder};
 
 use super::{
@@ -17,27 +15,36 @@ struct AssignedSet {
 }
 
 struct SetCodeAllocator {
-    avaiable_setcodes: HashSet<u32>,
+    avaiable_setcodes: Vec<u32>,
 }
 
 impl SetCodeAllocator {
     pub fn new(setcode_len: u32) -> Self {
         Self {
-            avaiable_setcodes: HashSet::from_iter(0..(2u32).pow(setcode_len)),
+            avaiable_setcodes: Vec::from_iter(0..(2u32).pow(setcode_len)),
         }
     }
     pub fn is_avaiable(&self, setcode: u32) -> bool {
         self.avaiable_setcodes.contains(&setcode)
     }
     pub fn allocate_setcode(&mut self, setcode: u32) -> bool {
-        println!("allocate specific");
-        self.avaiable_setcodes.remove(&setcode)
+        println!("allocate specific {setcode}");
+        match self.avaiable_setcodes.iter().position(|x| *x == setcode) {
+            Some(pos) => {
+                self.avaiable_setcodes.remove(pos);
+                println!("suc");
+                true
+            }
+            None => {
+                println!("fail");
+                false
+            }
+        }
     }
     pub fn allocate_any(&mut self) -> Option<u32> {
-        println!("allocate any");
-        let setcode = self.avaiable_setcodes.iter().nth(0).cloned()?;
-        self.avaiable_setcodes.remove(&setcode);
-        Some(setcode)
+        let x = self.avaiable_setcodes.pop();
+        println!("alloc any {x:?}");
+        x
     }
 }
 
@@ -85,6 +92,7 @@ pub fn assign_messages_ids(
     let mut set_pair: Vec<(Option<AssignedSet>, &MinimizedSet)> =
         std::iter::zip(std::iter::repeat(None), minimized_network.sets()).collect();
 
+    // assign fixed ids
     for (assigned_set, set) in set_pair.iter_mut() {
         let message_count: usize = (0..MessagePriority::count())
             .into_iter()
@@ -140,6 +148,7 @@ pub fn assign_messages_ids(
         });
     }
 
+    // assign other ids.
     for (assigned_set, set) in set_pair.iter_mut() {
         let assigned_set = match assigned_set {
             Some(set) => set,
@@ -158,8 +167,8 @@ pub fn assign_messages_ids(
             }
         };
         let setcode = assigned_set.setcode;
-        let mut reserved_ids: HashSet<u32> =
-            HashSet::from_iter(assigned_set.fixed_ids.clone().into_iter());
+        let mut reserved_ids: Vec<u32> =
+            Vec::from_iter(assigned_set.fixed_ids.clone().into_iter());
         let bucket_layout = minimized_network.bucket_layout();
 
         let mut bucket_offset = 0;
@@ -185,7 +194,7 @@ pub fn assign_messages_ids(
                 let priority = (bucket_offset as i32 + prio_offset) as u32;
                 let id = (priority << setcode_len) | setcode;
                 assert!(!reserved_ids.contains(&id));
-                reserved_ids.insert(id);
+                reserved_ids.push(id);
                 if assigned_set.ide {
                     msg.set_ext_id(id);
                 } else {
@@ -199,21 +208,24 @@ pub fn assign_messages_ids(
         }
     }
 
-    nodes.iter().map(|node| {
-        let node_name = node.0.borrow().name.clone();
-        NodeFilterInfo {
-            node: node.clone(),
-            filters: set_pair
-                .iter()
-                .map(|(a, _)| a)
-                .flatten()
-                .filter(|x| x.receivers.iter().any(|n| n.0.borrow().name == node_name))
-                .map(|x| FilterInfo::Setcode {
-                    setcode: x.setcode,
-                    setcode_len,
-                    ide: x.ide,
-                })
-                .collect(),
-        }
-    }).collect()
+    nodes
+        .iter()
+        .map(|node| {
+            let node_name = node.0.borrow().name.clone();
+            NodeFilterInfo {
+                node: node.clone(),
+                filters: set_pair
+                    .iter()
+                    .map(|(a, _)| a)
+                    .flatten()
+                    .filter(|x| x.receivers.iter().any(|n| n.0.borrow().name == node_name))
+                    .map(|x| FilterInfo::Setcode {
+                        setcode: x.setcode,
+                        setcode_len,
+                        ide: x.ide,
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
 }
