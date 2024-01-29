@@ -490,7 +490,7 @@ impl NetworkBuilder {
             .iter()
             .map(|bus_builder| {
                 let bus_data = bus_builder.0.borrow();
-                make_config_ref(config::bus::Bus::new(bus_data.id, bus_data.baudrate))
+                make_config_ref(config::bus::Bus::new(&bus_data.name, bus_data.id, bus_data.baudrate))
             })
             .collect();
 

@@ -8,13 +8,15 @@ pub type BusRef = ConfigRef<Bus>;
 pub struct Bus {
     id : u32,
     baudrate : u32,
+    name : String,
 }
 
 impl Bus {
-    pub fn new(id : u32, baudrate : u32) -> Self{
+    pub fn new(name : &str, id : u32, baudrate : u32) -> Self{
         Self {
             id,
-            baudrate
+            baudrate,
+            name : name.to_owned(),
         }
     }
     pub fn id(&self) -> u32 {
@@ -22,6 +24,9 @@ impl Bus {
     }
     pub fn baudrate(&self) -> u32 {
         self.baudrate
+    }
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
