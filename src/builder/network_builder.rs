@@ -527,7 +527,6 @@ impl NetworkBuilder {
                     }else {
                         (max_entry as f64).log2().floor() as u8 + 1
                     };
-                    println!("enum size = {size}");
                     make_config_ref(Type::Enum {
                         name: enum_data.name.clone(),
                         size,
@@ -804,7 +803,6 @@ impl NetworkBuilder {
                     .iter()
                     .find(|m| m.name() == tx_message_builder.0.borrow().name)
                     .expect("invalid message_builder was probably not added to the network");
-                // println!("message = {}", message_ref.name());
                 match &message_ref.encoding() {
                     Some(encoding) => {
                         for attribute in encoding.attributes() {

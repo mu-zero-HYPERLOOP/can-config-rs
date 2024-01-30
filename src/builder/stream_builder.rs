@@ -103,7 +103,6 @@ impl StreamBuilder {
 impl ReceiveStreamBuilder {
     pub fn new(stream_builder: StreamBuilder, rx_node: NodeBuilder) -> ReceiveStreamBuilder {
         let rx_node_name = rx_node.0.borrow().name.clone();
-        println!("create receive builder : {rx_node_name}");
         drop(rx_node_name);
         ReceiveStreamBuilder(make_builder_ref(ReceiveStreamData {
             stream_builder,

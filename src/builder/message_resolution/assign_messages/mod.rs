@@ -28,23 +28,18 @@ impl SetCodeAllocator {
         self.avaiable_setcodes.contains(&setcode)
     }
     pub fn allocate_setcode(&mut self, setcode: u32) -> bool {
-        println!("allocate specific {setcode}");
         match self.avaiable_setcodes.iter().position(|x| *x == setcode) {
             Some(pos) => {
                 self.avaiable_setcodes.remove(pos);
-                println!("suc");
                 true
             }
             None => {
-                println!("fail");
                 false
             }
         }
     }
     pub fn allocate_any(&mut self) -> Option<u32> {
-        let x = self.avaiable_setcodes.pop();
-        println!("alloc any {x:?}");
-        x
+        self.avaiable_setcodes.pop()
     }
 }
 
@@ -115,7 +110,7 @@ pub fn assign_messages_ids(
             let id = fixed_message.id();
             let code = id & 0xFFFFFFFFu32.overflowing_shr(32 - setcode_len as u32).0;
             let ok = match setcode {
-                Some(setcode) => setcode != code,
+                Some(setcode) => setcode == code,
                 None => setcode_allocator.allocate_setcode(code),
             };
             if ok {
@@ -169,6 +164,7 @@ pub fn assign_messages_ids(
         let setcode = assigned_set.setcode;
         let mut reserved_ids: Vec<u32> =
             Vec::from_iter(assigned_set.fixed_ids.clone().into_iter());
+
         let bucket_layout = minimized_network.bucket_layout();
 
         let mut bucket_offset = 0;

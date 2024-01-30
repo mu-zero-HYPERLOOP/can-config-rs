@@ -138,3 +138,145 @@ fn message_resolution_32x75_uniform() {
     perf1(32, 75, vec![MessagePriority::Normal]);
 }
 
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to200() {
+    for node_count in 1..16 {
+        let max_msg_count = (200f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to400() {
+    for node_count in 1..16 {
+        let max_msg_count = (400f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to600() {
+    for node_count in 1..16 {
+        let max_msg_count = (600f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to800() {
+    for node_count in 1..16 {
+        let max_msg_count = (800f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to1000() {
+    for node_count in 1..16 {
+        let max_msg_count = (1000f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to1200() {
+    for node_count in 1..16 {
+        let max_msg_count = (1200f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to1400() {
+    for node_count in 1..16 {
+        let max_msg_count = (1400f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to1600() {
+    for node_count in 1..16 {
+        let max_msg_count = (1600f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to1800() {
+    for node_count in 1..16 {
+        let max_msg_count = (1800f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_000_fixed_1to16x0to2000() {
+    for node_count in 1..16 {
+        let max_msg_count = (2000f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                msg_count,
+                vec![],
+            );
+        }
+    }
+}
+

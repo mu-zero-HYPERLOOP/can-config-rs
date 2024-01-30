@@ -1,23 +1,23 @@
-use crate::{errors, config::TypeRef};
+use crate::{config::TypeRef, errors};
 
 use self::{filter_configuration::NodeFilterBank, fixed_messages::MessageSplit};
 
-use super::{MessageBuilder, bus::BusBuilder, NodeBuilder};
+use super::{bus::BusBuilder, MessageBuilder, NodeBuilder};
 
-
-mod set_minimization;
-mod receive_set;
-mod bus_balancing;
 mod assign_messages;
+mod bus_balancing;
 mod filter_configuration;
-mod logging;
 mod fixed_messages;
+mod logging;
+mod receive_set;
+mod set_minimization;
 
+const LOGGING: bool = false;
 
 pub fn resolve_ids_filters_and_buses(
     buses: &Vec<BusBuilder>,
     messages: &Vec<MessageBuilder>,
-    nodes : &Vec<NodeBuilder>,
+    nodes: &Vec<NodeBuilder>,
     types: &Vec<TypeRef>,
 ) -> errors::Result<Vec<NodeFilterBank>> {
     let mut messages = messages.clone();
@@ -30,17 +30,26 @@ pub fn resolve_ids_filters_and_buses(
     buses.sort_by_key(|k| k.0.borrow().name.clone());
     types.sort_by_key(|t| t.name());
 
-
-
-    let log_info = logging::cache_logging_info(&types ,&messages);
+    let log_info = if LOGGING {
+        Some(logging::cache_logging_info(&types, &messages))
+    }else {
+        None
+    };
     let message_split = MessageSplit::from(&messages);
-    let network_info = receive_set::generate_receive_sets_from_messages(&nodes, message_split.prio_messages());
+    let network_info =
+        receive_set::generate_receive_sets_from_messages(&nodes, message_split.prio_messages());
     let minimized_network = set_minimization::minimize_sets(network_info);
-    let filter_infos = assign_messages::assign_messages_ids(message_split.fixed_messages(), minimized_network, &nodes);
+    let filter_infos = assign_messages::assign_messages_ids(
+        message_split.fixed_messages(),
+        minimized_network,
+        &nodes,
+    );
     bus_balancing::balance_buses(&messages, &types, &buses);
     let filter_banks = filter_configuration::find_filter_configuration(filter_infos);
 
-    logging::log_info(log_info);
+    if LOGGING {
+        logging::log_info(log_info.unwrap());
+    }
     Ok(filter_banks)
 }
 

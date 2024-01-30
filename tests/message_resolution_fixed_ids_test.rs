@@ -72,7 +72,7 @@ fn message_resolution_empty_config() {
     });
 }
 
-fn perf1(node_count: u32, non_message_count: u32, fixed_message_count: u32, ide : bool) {
+fn perf1(node_count: u32, non_message_count: u32, fixed_message_count: u32, ide: bool) {
     check_builder(|| {
         let mut node_gen = MessageNameGen::new();
         let mut name_gen = MessageNameGen::new();
@@ -103,7 +103,7 @@ fn perf1(node_count: u32, non_message_count: u32, fixed_message_count: u32, ide 
                     name.hash(&mut hasher);
                     let hashed_id = if ide {
                         (hasher.finish() & 0x1FFFFFFF) as u32
-                    }else {
+                    } else {
                         (hasher.finish() & 0x7FF) as u32
                     };
                     if !message_ids_used.contains(&hashed_id) {
@@ -111,7 +111,7 @@ fn perf1(node_count: u32, non_message_count: u32, fixed_message_count: u32, ide 
                         println!("assign id {hashed_id}");
                         if ide {
                             message.set_ext_id(hashed_id);
-                        }else {
+                        } else {
                             message.set_std_id(hashed_id);
                         }
                         break;
@@ -130,23 +130,98 @@ fn message_resolution_1x10_any_1x_std_fixed() {
     const MSG_COUNT: u32 = 10;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         false,
     );
 }
 
-
-// TODO fixme i should definitly work properly!!! 
-// probably a bug in id assignment, but might also be somewhere else!
 #[test]
 fn message_resolution_1x10_any_2x_std_fixed() {
     const FIXED_COUNT: u32 = 2;
     const MSG_COUNT: u32 = 10;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_1x10_any_4x_std_fixed() {
+    const FIXED_COUNT: u32 = 4;
+    const MSG_COUNT: u32 = 10;
+    const NODE_COUNT: u32 = 1;
+    perf1(
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_1x10_any_8x_std_fixed() {
+    const FIXED_COUNT: u32 = 8;
+    const MSG_COUNT: u32 = 10;
+    const NODE_COUNT: u32 = 1;
+    perf1(
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_1x100_any_1x_std_fixed() {
+    const FIXED_COUNT: u32 = 1;
+    const MSG_COUNT: u32 = 100;
+    const NODE_COUNT: u32 = 1;
+    perf1(
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_1x100_any_10x_std_fixed() {
+    const FIXED_COUNT: u32 = 10;
+    const MSG_COUNT: u32 = 100;
+    const NODE_COUNT: u32 = 1;
+    perf1(
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_2x100_any_10x_std_fixed() {
+    const FIXED_COUNT: u32 = 10;
+    const MSG_COUNT: u32 = 100;
+    const NODE_COUNT: u32 = 2;
+    perf1(
+        NODE_COUNT,
+        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
+        FIXED_COUNT / NODE_COUNT,
+        false,
+    );
+}
+
+#[test]
+fn message_resolution_2x200_any_20x_std_fixed() {
+    const FIXED_COUNT: u32 = 20;
+    const MSG_COUNT: u32 = 200;
+    const NODE_COUNT: u32 = 2;
+    perf1(
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         false,
@@ -159,7 +234,7 @@ fn message_resolution_1x10_any_2x_ext_fixed() {
     const MSG_COUNT: u32 = 10;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -172,7 +247,7 @@ fn message_resolution_1x10_any_4x_ext_fixed() {
     const MSG_COUNT: u32 = 10;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -185,7 +260,7 @@ fn message_resolution_1x10_any_8x_ext_fixed() {
     const MSG_COUNT: u32 = 10;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -198,7 +273,7 @@ fn message_resolution_1x100_any_1x_ext_fixed() {
     const MSG_COUNT: u32 = 100;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -211,7 +286,7 @@ fn message_resolution_1x100_any_10x_ext_fixed() {
     const MSG_COUNT: u32 = 100;
     const NODE_COUNT: u32 = 1;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -224,7 +299,7 @@ fn message_resolution_2x100_any_10x_ext_fixed() {
     const MSG_COUNT: u32 = 100;
     const NODE_COUNT: u32 = 2;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -232,12 +307,12 @@ fn message_resolution_2x100_any_10x_ext_fixed() {
 }
 
 #[test]
-fn message_resolution_2x100_any_20x_ext_fixed() {
-    const FIXED_COUNT: u32 = 10;
-    const MSG_COUNT: u32 = 100;
+fn message_resolution_2x200_any_20x_ext_fixed() {
+    const FIXED_COUNT: u32 = 20;
+    const MSG_COUNT: u32 = 300;
     const NODE_COUNT: u32 = 2;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
@@ -245,27 +320,157 @@ fn message_resolution_2x100_any_20x_ext_fixed() {
 }
 
 #[test]
-fn message_resolution_2x100_any_30x_ext_fixed() {
-    const FIXED_COUNT: u32 = 10;
-    const MSG_COUNT: u32 = 100;
+fn message_resolution_2x300_any_30x_ext_fixed() {
+    const FIXED_COUNT: u32 = 30;
+    const MSG_COUNT: u32 = 300;
     const NODE_COUNT: u32 = 2;
     perf1(
-        1,
+        NODE_COUNT,
         (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
         FIXED_COUNT / NODE_COUNT,
         true,
     );
 }
 
+
+
+
 #[test]
-fn message_resolution_2x100_any_30x_std_fixed() {
-    const FIXED_COUNT: u32 = 10;
-    const MSG_COUNT: u32 = 100;
-    const NODE_COUNT: u32 = 2;
-    perf1(
-        1,
-        (MSG_COUNT - FIXED_COUNT) / NODE_COUNT,
-        FIXED_COUNT / NODE_COUNT,
-        true,
-    );
+fn message_resolution_001_fixed_1to16x0to200() {
+    for node_count in 1..16 {
+        let max_msg_count = (200f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                false,
+            );
+        }
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                true,
+            );
+        }
+    }
 }
+
+#[test]
+fn message_resolution_001_fixed_1to16x0to300() {
+    for node_count in 1..16 {
+        let max_msg_count = (300f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                false,
+            );
+        }
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                true,
+            );
+        }
+    }
+}
+
+#[test]
+fn message_resolution_001_fixed_1to16x0to400() {
+    for node_count in 1..16 {
+        let max_msg_count = (400f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                false,
+            );
+        }
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (99f64 / 100f64)) as u32,
+                (msg_count as f64 * (1f64 / 100f64)) as u32,
+                true,
+            );
+        }
+    }
+}
+
+
+#[test]
+fn message_resolution_002_fixed_1to16x0to200() {
+    for node_count in 1..16 {
+        let max_msg_count = (200f64 / (node_count as f64)) as u32;
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (98f64 / 100f64)) as u32,
+                (msg_count as f64 * (2f64 / 100f64)) as u32,
+                false,
+            );
+        }
+        for msg_count in 1..max_msg_count {
+            perf1(
+                node_count,
+                (msg_count as f64 * (98f64 / 100f64)) as u32,
+                (msg_count as f64 * (2f64 / 100f64)) as u32,
+                true,
+            );
+        }
+    }
+}
+
+// TODO i would like this to work!
+// #[test]
+// fn message_resolution_002_fixed_1to16x0to300() {
+//     for node_count in 1..16 {
+//         let max_msg_count = (300f64 / (node_count as f64)) as u32;
+//         for msg_count in 1..max_msg_count {
+//             perf1(
+//                 node_count,
+//                 (msg_count as f64 * (98f64 / 100f64)) as u32,
+//                 (msg_count as f64 * (2f64 / 100f64)) as u32,
+//                 false,
+//             );
+//         }
+//         for msg_count in 1..max_msg_count {
+//             perf1(
+//                 node_count,
+//                 (msg_count as f64 * (98f64 / 100f64)) as u32,
+//                 (msg_count as f64 * (2f64 / 100f64)) as u32,
+//                 true,
+//             );
+//         }
+//     }
+// }
+
+// #[test]
+// fn message_resolution_002_fixed_1to16x0to400() {
+//     for node_count in 1..16 {
+//         let max_msg_count = (400f64 / (node_count as f64)) as u32;
+//         for msg_count in 1..max_msg_count {
+//             perf1(
+//                 node_count,
+//                 (msg_count as f64 * (98f64 / 100f64)) as u32,
+//                 (msg_count as f64 * (2f64 / 100f64)) as u32,
+//                 false,
+//             );
+//         }
+//         for msg_count in 1..max_msg_count {
+//             perf1(
+//                 node_count,
+//                 (msg_count as f64 * (98f64 / 100f64)) as u32,
+//                 (msg_count as f64 * (2f64 / 100f64)) as u32,
+//                 true,
+//             );
+//         }
+//     }
+// }

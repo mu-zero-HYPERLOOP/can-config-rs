@@ -115,9 +115,7 @@ impl NodeBuilder {
     }
 
     pub fn receive_stream(&self, tx_node_name: &str, tx_stream_name: &str) -> ReceiveStreamBuilder {
-        println!("node:: receive stream tx_node_name : {tx_node_name}");
         let node_data = self.0.borrow();
-        println!("node:: receive stream self_name : {}", node_data.name);
         if tx_node_name == node_data.name {
             panic!("can't receive local stream");
         }
