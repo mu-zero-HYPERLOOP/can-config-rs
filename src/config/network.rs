@@ -75,6 +75,11 @@ impl Network {
     pub fn heartbeat_message(&self) -> &MessageRef {
         &self.heartbeat_message
     }
+    /// The control panel ids start at 0.
+    /// returns the node_id associated with the control_panel.
+    pub fn control_panel_node_id(&self, control_panel_id : u8) -> u8{
+        self.nodes().len() as u8 + control_panel_id
+    }
 }
 
 impl Display for Network {
