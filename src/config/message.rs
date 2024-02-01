@@ -22,6 +22,21 @@ pub enum MessageId {
     ExtendedId(u32),
 }
 
+impl MessageId {
+    pub fn ide(&self) -> bool {
+        match &self {
+            MessageId::StandardId(_) => false,
+            MessageId::ExtendedId(_) => true,
+        }
+    }
+    pub fn as_u32(&self) -> u32 {
+        match &self {
+            MessageId::StandardId(id) => *id,
+            MessageId::ExtendedId(id) => *id,
+        }
+    }
+}
+
 pub type MessageRef = ConfigRef<Message>;
 
 #[derive(Debug)]
