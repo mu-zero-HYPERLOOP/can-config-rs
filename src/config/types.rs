@@ -1,7 +1,5 @@
 use super::{ConfigRef, SignalType, Visibility};
 
-
-
 pub type TypeRef = ConfigRef<Type>;
 
 #[derive(Debug, PartialEq)]
@@ -58,6 +56,25 @@ impl Type {
                 visibility: _,
             } => name.to_owned(),
             Type::Array { len, ty } => format!("{}[{len}]", ty.name()),
+        }
+    }
+    pub fn size(&self) -> u32 {
+        match &self {
+            Type::Primitive(signal_type) => signal_type.size() as u32,
+            Type::Struct {
+                name: _,
+                description: _,
+                attribs,
+                visibility: _,
+            } => attribs.iter().map(|(_, attrib_ty)| attrib_ty.size()).sum(),
+            Type::Enum {
+                name: _,
+                description: _,
+                size,
+                entries: _,
+                visibility: _,
+            } => *size as u32,
+            Type::Array { len, ty } => ty.size() * *len as u32,
         }
     }
 }
