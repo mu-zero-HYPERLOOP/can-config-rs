@@ -940,7 +940,7 @@ impl NetworkBuilder {
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
                 node_data.description.clone(),
-                nodes.len() as u16,
+                nodes.len() as u8,
                 node_types,
                 commands,
                 vec![],
