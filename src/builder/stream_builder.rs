@@ -163,7 +163,7 @@ impl ReceiveStreamBuilder {
                 (tx_oe, rx_oe)
             }
             (Some(tx_oe), Some(rx_oe)) => {
-                assert_eq!(&tx_oe.0.borrow().name, &rx_oe.0.borrow().name);
+                assert_eq!(&tx_oe.0.borrow().ty, &rx_oe.0.borrow().ty);
                 (tx_oe, rx_oe)
             }
         };
