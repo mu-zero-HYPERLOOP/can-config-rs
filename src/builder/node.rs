@@ -102,6 +102,15 @@ impl NodeBuilder {
             .push(message_builder.0.borrow().call_message.clone());
     }
     pub fn create_object_entry(&self, name: &str, ty: &str) -> ObjectEntryBuilder {
+        println!("[CANZERO-CONFIG::construct] Require ObjectEntry {}::{name}", self.0.borrow().name);
+        let existing_oe = self.0.borrow().object_entries.iter().find(|oe| oe.0.borrow().name == name).cloned();
+        match existing_oe {
+            Some(oe) => {
+                assert_eq!(&oe.0.borrow().ty, ty);
+                return oe;
+            }
+            None => (),
+        };
         let object_entry_builder = ObjectEntryBuilder::new(name, ty, &self.0.borrow().name);
         let mut node_data = self.0.borrow_mut();
         node_data.object_entries.push(object_entry_builder.clone());
