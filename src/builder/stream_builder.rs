@@ -117,21 +117,18 @@ impl ReceiveStreamBuilder {
     }
     pub fn map(&self, from: &str, to: &str) {
         // resolve from
-        let mut rx_stream_data = self.0.borrow_mut();
-        let tx_stream_builder = rx_stream_data.stream_builder.clone();
-        let tx_stream_data = tx_stream_builder.0.borrow();
-        let tx_node_name = tx_stream_data.tx_node.0.borrow().name.clone();
-        let tx_oe_pos = tx_stream_data
+        let tx_stream_builder = self.0.borrow().stream_builder.clone();
+
+        let tx_oe = tx_stream_builder
+            .0
+            .borrow()
             .object_entries
             .iter()
-            .position(|oe| oe.0.borrow().name == from)
-            .expect(&format!(
-                "{tx_node_name} doesn't define a object entry called {from}"
-            ));
-        let tx_oe = tx_stream_data.object_entries[tx_oe_pos].clone();
-        drop(tx_stream_data);
-        // resolve to
-        let rx_oe_opt = rx_stream_data
+            .find(|oe| oe.0.borrow().name == from)
+            .cloned();
+        let rx_oe = self
+            .0
+            .borrow()
             .rx_node
             .0
             .borrow()
@@ -139,22 +136,42 @@ impl ReceiveStreamBuilder {
             .iter()
             .find(|oe| oe.0.borrow().name == to)
             .cloned();
-        let tx_stream_data = tx_stream_builder.0.borrow();
-        let oe = match rx_oe_opt {
-            Some(rx_oe) => {
-                // explicit type check!
-                if rx_oe.0.borrow().ty != tx_oe.0.borrow().ty {
-                    panic!(
-                        "{tx_node_name}::{from} has a different type than {}::{to}",
-                        tx_stream_data.tx_node.0.borrow().name
-                    );
-                }
-                rx_oe
+
+        let (tx_oe, rx_oe) = match (tx_oe, rx_oe) {
+            (None, None) => {
+                // NOTE: no type information avaiable (theretically this should be
+                // allowed because the type information might be added later to.
+                // For now this will not be allowed
+                panic!("Not possible to create a rx_stream without forward defined types. 
+                       Please add a object entry with one of the types used in the mapping before defining the rx_stream mapping.");
             }
-            None => rx_stream_data
-                .rx_node
-                .create_object_entry(to, &tx_oe.0.borrow().ty),
+            (None, Some(rx_oe)) => {
+                // NOTE: create tx_oe
+                let tx_oe = tx_stream_builder
+                    .0
+                    .borrow()
+                    .tx_node
+                    .create_object_entry(from, &rx_oe.0.borrow().ty);
+                (tx_oe, rx_oe)
+            }
+            (Some(tx_oe), None) => {
+                let rx_oe = self
+                    .0
+                    .borrow()
+                    .rx_node
+                    .create_object_entry(to, &tx_oe.0.borrow().name);
+                (tx_oe, rx_oe)
+            }
+            (Some(tx_oe), Some(rx_oe)) => {
+                assert_eq!(&tx_oe.0.borrow().name, &rx_oe.0.borrow().name);
+                (tx_oe, rx_oe)
+            }
         };
-        rx_stream_data.object_entries.push((tx_oe_pos, oe));
+        let tx_oe_name = tx_oe.0.borrow().name.clone();
+        let tx_oe_position = tx_stream_builder.0.borrow()
+            .object_entries
+            .iter()
+            .position(|oe| &oe.0.borrow().name == &tx_oe_name).expect("Should really exist at this point");
+        self.0.borrow_mut().object_entries.push((tx_oe_position, rx_oe));
     }
 }
