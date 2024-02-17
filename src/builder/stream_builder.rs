@@ -185,7 +185,6 @@ impl ReceiveStreamBuilder {
             Some(pos) => pos,
             None => {
                 // NOTE: add to stream object!
-                println!("add tx_entry : {}", tx_oe_name);
                 tx_stream_builder.add_entry(&tx_oe_name);
                 tx_stream_builder
                     .0

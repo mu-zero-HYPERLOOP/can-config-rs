@@ -77,20 +77,6 @@ impl Message {
         self.usage.get().expect("Karl fucked up big time (message usage was not set property while building!)")
     }
     pub fn __set_usage(&self, usage : MessageUsage) {
-        match self.usage.get() {
-            Some(us) => match &usage {
-                MessageUsage::Stream(s) => println!("STREAM {}", s.name()),
-                MessageUsage::CommandReq(_) => println!("COMREQ"),
-                MessageUsage::CommandResp(_) => println!("COMRESP"),
-                MessageUsage::GetResp => println!("GREQ"),
-                MessageUsage::GetReq => println!("GRESP"),
-                MessageUsage::SetResp => println!("SRESP"),
-                MessageUsage::SetReq => println!("SREQ"),
-                MessageUsage::Heartbeat => println!("HEART"),
-                MessageUsage::External { interval } => println!("EXT"),
-            }
-            None => println!("NONE"),
-        }
         self.usage.set(usage).expect("__set_usage can only be called once (when calling NetworkBuilder::build(&self))");
     }
     pub fn __get_usage(&self) -> &OnceLock<MessageUsage> {

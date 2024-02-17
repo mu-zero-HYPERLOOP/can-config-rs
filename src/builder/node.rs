@@ -117,6 +117,11 @@ impl NodeBuilder {
         object_entry_builder
     }
     pub fn create_stream(&self, name: &str) -> StreamBuilder {
+        println!("[CANZERO-CONFIG::construct] Require Stream {}::{name}", self.0.borrow().name);
+        match self.0.borrow().tx_streams.iter().find(|stream| stream.0.borrow().name == name).cloned() {
+            Some(stream) => return stream,
+            None => (),
+        };
         let stream_builder = StreamBuilder::new(name, self.clone());
         let mut node_data = self.0.borrow_mut();
         node_data.tx_streams.push(stream_builder.clone());

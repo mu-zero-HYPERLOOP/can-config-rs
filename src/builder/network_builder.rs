@@ -196,6 +196,7 @@ impl NetworkBuilder {
     }
     pub fn create_node(&self, name: &str) -> NodeBuilder {
         let network_data = self.0.borrow();
+        println!("[CANZERO-CONFIG::construct] Require node {name}");
         // check if node already exists.
         let existing_node = network_data
             .nodes
@@ -906,7 +907,6 @@ impl NetworkBuilder {
             let mut tx_streams = vec![];
             for tx_stream in &node_builder.0.borrow().tx_streams {
                 let stream_data = tx_stream.0.borrow();
-                println!("stream_name : {}", stream_data.name);
 
                 //resolve message
                 let message = messages
@@ -916,7 +916,6 @@ impl NetworkBuilder {
                     .clone();
                 let mut mappings = vec![];
                 for oe_builder in &stream_data.object_entries {
-                    println!("bar");
                     let oe_data = oe_builder.0.borrow();
                     let oe = object_entries
                         .iter()
@@ -934,15 +933,11 @@ impl NetworkBuilder {
                     stream_data.visbility.clone(),
                     stream_data.interval,
                 ));
-                println!("baz");
                 message.__set_usage(MessageUsage::Stream(stream_ref.clone()));
-                println!("fuck");
                 tx_streams.push(stream_ref);
-                println!("end");
             }
-            println!("done");
+            println!("[CANZERO-CONFIG::build] Collected all types used by node {}", &node_data.name);
 
-            println!("[CANZERO-CONFIG::build] Successfully collected all types used by node {}", &node_data.name);
             println!("[CANZERO-CONFIG::build] Sorting all types of {} in topological order", &node_data.name);
             let node_types = Self::topo_sort_types(&node_types);
 
