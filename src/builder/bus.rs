@@ -14,6 +14,7 @@ pub struct BusData {
 
 impl BusBuilder {
     pub fn new(name : &str, id : u32, baudrate: Option<u32>) -> Self {
+        println!("[CANZERO-CONFIG::construct] Creating bus {name} with id {id}");
         BusBuilder(make_builder_ref(BusData {
             name : name.to_owned(),
             id,

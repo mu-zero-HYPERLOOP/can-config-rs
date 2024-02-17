@@ -32,6 +32,7 @@ pub enum TypeBuilder {
 
 impl EnumBuilder {
     pub fn new(name: &str) -> EnumBuilder {
+        println!("[CANZERO-CONFIG::construct] Creating enum {name}");
         EnumBuilder(make_builder_ref(EnumData {
             name: name.to_owned(),
             description: None,
@@ -59,6 +60,7 @@ impl EnumBuilder {
 
 impl StructBuilder {
     pub fn new(name: &str) -> StructBuilder {
+        println!("[CANZERO-CONFIG::construct] Creating struct {name}");
         StructBuilder(make_builder_ref(StructData {
             name: name.to_owned(),
             description: None,

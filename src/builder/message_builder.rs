@@ -109,6 +109,7 @@ impl MessagePriority {
 
 impl MessageBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder, expected_interval : Option<Duration>) -> MessageBuilder {
+        println!("[CANZERO-CONFIG::construct] Creating message {name}");
         MessageBuilder(make_builder_ref(MessageData {
             name: name.to_owned(),
             description: None,

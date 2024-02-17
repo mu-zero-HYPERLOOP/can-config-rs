@@ -42,6 +42,7 @@ pub struct NetworkData {
 
 impl NetworkBuilder {
     pub fn new() -> NetworkBuilder {
+        println!("[CANZERO-CONFIG::construct] Create Network");
         let network_builder = NetworkBuilder(make_builder_ref(NetworkData {
             messages: make_builder_ref(vec![]),
             types: make_builder_ref(vec![]),
@@ -481,9 +482,11 @@ impl NetworkBuilder {
         if self.0.borrow().buses.borrow().is_empty() {
             // ensure that there is always at least one bus defined!
             self.create_bus("can0", None);
+            println!("[CANZERO-CONFIG::build] Implicitly added can0 as the only bus");
         }
         let builder = self.0.borrow();
 
+        println!("[CANZERO-CONFIG::build] Building buses");
         let buses: Vec<BusRef> = builder
             .buses
             .borrow()
@@ -494,10 +497,12 @@ impl NetworkBuilder {
             })
             .collect();
 
+
         // sort types in topological order!
         let type_builders = Self::topo_sort_type_builders(&builder.types.borrow())?;
 
         // define types.
+        println!("[CANZERO-CONFIG::build] Building Types");
         let mut types = vec![];
         for type_builder in type_builders.iter() {
             let type_ref: TypeRef = match type_builder {
@@ -565,9 +570,12 @@ impl NetworkBuilder {
         // and buses!
         let nodes = builder.nodes.borrow().clone();
         drop(builder);
+        println!("[CANZERO-CONFIG::build] Resolving message ids and bus assignments");
         resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &nodes, &types)?;
         let builder = self.0.borrow();
 
+
+        println!("[CANZERO-CONFIG::build] Building messages");
         let mut messages = vec![];
         for message_builder in builder.messages.borrow().iter() {
             let message_data = message_builder.0.borrow();
@@ -780,6 +788,7 @@ impl NetworkBuilder {
 
             let mut node_types = vec![];
 
+            println!("[CANZERO-CONFIG::build] Collecting all messages received by node {}", &node_data.name);
             let mut rx_messages = vec![];
             for rx_message_builder in &node_data.rx_messages {
                 let message_ref = messages
@@ -797,6 +806,7 @@ impl NetworkBuilder {
                 }
                 rx_messages.push(message_ref.clone());
             }
+            println!("[CANZERO-CONFIG::build] Collecting all messages transmitted by node {}", &node_data.name);
             let mut tx_messages = vec![];
             for tx_message_builder in &node_data.tx_messages {
                 let message_ref = messages
@@ -814,6 +824,7 @@ impl NetworkBuilder {
                 tx_messages.push(message_ref.clone());
             }
 
+            println!("[CANZERO-CONFIG::build] Building all commands transmitted by node {}", &node_data.name);
             let mut commands: Vec<ConfigRef<Command>> = vec![];
             for tx_command_builder in &node_builder.0.borrow().commands {
                 let command_data = tx_command_builder.0.borrow();
@@ -841,6 +852,7 @@ impl NetworkBuilder {
                 commands.push(command_ref);
             }
 
+            println!("[CANZERO-CONFIG::build] Building Object Entries of node {}", &node_data.name);
             let mut object_entries = vec![];
             let mut id_acc = 0;
             for object_entry_builder in &node_builder.0.borrow().object_entries {
@@ -890,9 +902,11 @@ impl NetworkBuilder {
                 )));
             }
 
+            println!("[CANZERO-CONFIG::build] Building streams transmitted by node {}", node_data.name);
             let mut tx_streams = vec![];
             for tx_stream in &node_builder.0.borrow().tx_streams {
                 let stream_data = tx_stream.0.borrow();
+                println!("stream_name : {}", stream_data.name);
 
                 //resolve message
                 let message = messages
@@ -902,6 +916,7 @@ impl NetworkBuilder {
                     .clone();
                 let mut mappings = vec![];
                 for oe_builder in &stream_data.object_entries {
+                    println!("bar");
                     let oe_data = oe_builder.0.borrow();
                     let oe = object_entries
                         .iter()
@@ -919,10 +934,16 @@ impl NetworkBuilder {
                     stream_data.visbility.clone(),
                     stream_data.interval,
                 ));
+                println!("baz");
                 message.__set_usage(MessageUsage::Stream(stream_ref.clone()));
+                println!("fuck");
                 tx_streams.push(stream_ref);
+                println!("end");
             }
+            println!("done");
 
+            println!("[CANZERO-CONFIG::build] Successfully collected all types used by node {}", &node_data.name);
+            println!("[CANZERO-CONFIG::build] Sorting all types of {} in topological order", &node_data.name);
             let node_types = Self::topo_sort_types(&node_types);
 
             let buses = node_data
@@ -936,7 +957,9 @@ impl NetworkBuilder {
                         .clone()
                 })
                 .collect();
+            println!("[CANZERO-CONFIG::build] Collecting all buses the node {} is connected to", node_data.name);
 
+            println!("[CANZERO-CONFIG::build] Successfully build transmitting part of node {}", node_data.name);
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
                 node_data.description.clone(),
@@ -958,6 +981,7 @@ impl NetworkBuilder {
         for i in 0..n_nodes {
             let node_builder = &builder.nodes.borrow()[i];
             let node_data = node_builder.0.borrow();
+            println!("[CANZERO-CONFIG::build] Linking Received command of node {}", node_data.name);
             for rx_command in &node_data.extern_commands {
                 let rx_command_data = rx_command.0.borrow();
                 'outer: for j in 0..n_nodes {
@@ -978,6 +1002,7 @@ impl NetworkBuilder {
                     }
                 }
             }
+            println!("[CANZERO-CONFIG::build] Linking Received streams to node {}", node_data.name);
             for rx_stream in &node_data.rx_streams {
                 let rx_stream_data = rx_stream.0.borrow();
                 let tx_stream_builder = rx_stream_data.stream_builder.clone();
@@ -1048,18 +1073,21 @@ impl NetworkBuilder {
             }
         }
 
+        println!("[CANZERO-CONFIG::build] Successfully build all nodes");
         let nodes: Vec<ConfigRef<Node>> = nodes
             .into_iter()
             .map(|n| make_config_ref(n.into_inner()))
             .collect();
 
         // set node for all object entries!
+        println!("[CANZERO-CONFIG::build] Linking Object Entries to nodes");
         for node in &nodes {
             for oe in node.object_entries() {
                 oe.__set_node(node.clone());
             }
         }
 
+        println!("[CANZERO-CONFIG::build] Finalizing usage of all messages");
         // set usage for all messages!
         for message in &messages {
             let once_cell = message.__get_usage();
@@ -1088,7 +1116,7 @@ impl NetworkBuilder {
                 once_cell.set(MessageUsage::External { interval }).unwrap();
             }
         }
-
+        
         let heartbeat_message = messages
             .iter()
             .find(|message| message.name() == "heartbeat")

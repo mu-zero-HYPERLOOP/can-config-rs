@@ -23,7 +23,7 @@ pub struct NodeData {
 
 impl NodeBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder) -> NodeBuilder {
-
+        println!("[CANZERO-CONFIG::construct] Creating node {name}");
         let node_builder = NodeBuilder(make_builder_ref(NodeData {
             name: name.to_owned(),
             description: None,
@@ -102,7 +102,7 @@ impl NodeBuilder {
             .push(message_builder.0.borrow().call_message.clone());
     }
     pub fn create_object_entry(&self, name: &str, ty: &str) -> ObjectEntryBuilder {
-        let object_entry_builder = ObjectEntryBuilder::new(name, ty);
+        let object_entry_builder = ObjectEntryBuilder::new(name, ty, &self.0.borrow().name);
         let mut node_data = self.0.borrow_mut();
         node_data.object_entries.push(object_entry_builder.clone());
         object_entry_builder
@@ -116,6 +116,7 @@ impl NodeBuilder {
 
     pub fn receive_stream(&self, tx_node_name: &str, tx_stream_name: &str) -> ReceiveStreamBuilder {
         let node_data = self.0.borrow();
+        println!("[CANZERO-CONFIG::construct] Creating dependencies of receive stream {tx_node_name}::{tx_stream_name} -> {}", node_data.name);
         if tx_node_name == node_data.name {
             panic!("can't receive local stream");
         }
