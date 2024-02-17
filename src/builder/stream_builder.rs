@@ -78,6 +78,7 @@ impl StreamBuilder {
             // Skip if the object entry is already mapped!
             return;
         }
+        println!("rec");
         let node = stream_data.tx_node.clone();
         let node_data = node.0.borrow();
         let oe = match node_data
@@ -96,6 +97,7 @@ impl StreamBuilder {
         stream_data.object_entries.push(oe.clone());
         let oe_data = oe.0.borrow();
         stream_data.format.add_type(&oe_data.ty, &oe_data.name);
+        println!("exit");
     }
     pub fn set_priority(&self, priority: MessagePriority) {
         self.0.borrow().message.set_any_std_id(priority);
@@ -121,6 +123,7 @@ impl ReceiveStreamBuilder {
         rx_stream_data.visibility = Visibility::Static;
     }
     pub fn map(&self, from: &str, to: &str) {
+        println!("map");
         // resolve from
         let tx_stream_builder = self.0.borrow().stream_builder.clone();
 
@@ -196,5 +199,6 @@ impl ReceiveStreamBuilder {
             .borrow_mut()
             .object_entries
             .push((tx_oe_map_position, rx_oe));
+        println!("exit-map");
     }
 }
