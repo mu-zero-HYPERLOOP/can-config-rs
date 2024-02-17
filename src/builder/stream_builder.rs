@@ -73,6 +73,11 @@ impl StreamBuilder {
     }
     pub fn add_entry(&self, name: &str) {
         let mut stream_data = self.0.borrow_mut();
+        // CHECK if entry already exists
+        if stream_data.object_entries.iter().any(|oe| &oe.0.borrow().name == name) {
+            // Skip if the object entry is already mapped!
+            return;
+        }
         let node = stream_data.tx_node.clone();
         let node_data = node.0.borrow();
         let oe = match node_data
@@ -168,10 +173,28 @@ impl ReceiveStreamBuilder {
             }
         };
         let tx_oe_name = tx_oe.0.borrow().name.clone();
-        let tx_oe_position = tx_stream_builder.0.borrow()
+        let tx_oe_map_position = tx_stream_builder
+            .0
+            .borrow()
             .object_entries
             .iter()
-            .position(|oe| &oe.0.borrow().name == &tx_oe_name).expect("Should really exist at this point");
-        self.0.borrow_mut().object_entries.push((tx_oe_position, rx_oe));
+            .position(|oe| &oe.0.borrow().name == &tx_oe_name);
+        let tx_oe_map_position = match tx_oe_map_position {
+            Some(pos) => pos,
+            None => {
+                // NOTE: add to stream object!
+                tx_stream_builder.add_entry(&tx_oe_name);
+                tx_stream_builder
+                    .0
+                    .borrow()
+                    .object_entries
+                    .iter()
+                    .position(|oe| &oe.0.borrow().name == &tx_oe_name).expect("Mapping should really really exist by now xD.")
+            }
+        };
+        self.0
+            .borrow_mut()
+            .object_entries
+            .push((tx_oe_map_position, rx_oe));
     }
 }
