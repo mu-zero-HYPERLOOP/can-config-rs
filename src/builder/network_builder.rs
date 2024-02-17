@@ -1117,6 +1117,7 @@ impl NetworkBuilder {
             .find(|message| message.name() == "heartbeat")
             .expect("heartbeat message was not defined").clone();
 
+        println!("[CANZERO-CONFIG::build] Successfully build configuration");
         Ok(make_config_ref(Network::new(
             chrono::Local::now(),
             nodes,
