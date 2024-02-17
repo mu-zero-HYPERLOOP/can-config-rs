@@ -166,11 +166,11 @@ impl ReceiveStreamBuilder {
                     .0
                     .borrow()
                     .rx_node
-                    .create_object_entry(to, &tx_oe.0.borrow().name);
+                    .create_object_entry(to, &tx_oe.0.borrow().ty);
                 (tx_oe, rx_oe)
             }
             (Some(tx_oe), Some(rx_oe)) => {
-                assert_eq!(&tx_oe.0.borrow().ty, &rx_oe.0.borrow().ty);
+                assert_eq!(&tx_oe.0.borrow().ty, &rx_oe.0.borrow().ty, "Stream mapping types don't match");
                 (tx_oe, rx_oe)
             }
         };
