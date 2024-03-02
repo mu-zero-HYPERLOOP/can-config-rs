@@ -109,6 +109,7 @@ impl MessagePriority {
 
 impl MessageBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder, expected_interval : Option<Duration>) -> MessageBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating message {name}");
         MessageBuilder(make_builder_ref(MessageData {
             name: name.to_owned(),
@@ -127,6 +128,7 @@ impl MessageBuilder {
     pub fn assign_bus(&self, bus_name: &str) -> BusBuilder {
         let mut message_data = self.0.borrow_mut();
         if message_data.bus.is_some() {
+            #[cfg(feature = "logging_info")]
             println!("WARNING: reassiged bus of message : {}
                      but messages can only be assigned to one bus,
                      if splitting is required it is done automatically by 

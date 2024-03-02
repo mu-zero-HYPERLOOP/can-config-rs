@@ -34,7 +34,6 @@ pub mod stream;
 pub mod types;
 pub mod visibility;
 pub mod bus;
-mod export_dbc;
 
 pub type ConfigRef<T> = Arc<T>;
 

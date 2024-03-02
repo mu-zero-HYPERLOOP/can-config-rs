@@ -1,10 +1,12 @@
 use std::time::Duration;
 
 use crate::{
-    builder::{MessageBuilder, MessagePriority, NetworkBuilder},
+    builder::{MessageBuilder, NetworkBuilder},
     config::{Type, TypeRef},
 };
 
+
+#[allow(unused)]
 struct MessageInfo {
     assigned_priority: String,
     assigned_bus: String,
@@ -16,6 +18,7 @@ pub struct LogInfo {
     types: Vec<TypeRef>,
 }
 
+#[allow(unused)]
 pub fn cache_logging_info(types: &Vec<TypeRef>, messages: &Vec<MessageBuilder>) -> LogInfo {
     LogInfo {
         types: types.clone(),
@@ -127,6 +130,7 @@ fn load_estimation(types: &Vec<TypeRef>, msg: &MessageBuilder) -> f64 {
     (max_bitlen as f64 / interval.as_millis() as f64) * 1e3f64
 }
 
+#[allow(unused)]
 pub fn log_info(log_info: LogInfo) {
     let mut messages = log_info.messages;
     messages.sort_by_key(|msg_info| match msg_info.message.0.borrow().id {

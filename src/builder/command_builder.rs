@@ -21,6 +21,7 @@ pub struct CommandData {
 
 impl CommandBuilder {
     pub fn new(name: &str, tx_node_builder: &NodeBuilder, expected_interval : Option<Duration>) -> CommandBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating command {name}");
         let node_data = tx_node_builder.0.borrow();
         let network_builder = &node_data.network_builder;

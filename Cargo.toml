@@ -14,3 +14,7 @@ chrono = "0.4.31"
 regex = "1.10.2"
 can-dbc = "5.0"
 bit_reverse = "0.1.8"
+
+[features]
+logging-info = []
+logging-irp = []

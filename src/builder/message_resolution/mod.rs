@@ -12,8 +12,6 @@ mod logging;
 mod receive_set;
 mod set_minimization;
 
-const LOGGING: bool = false;
-
 pub fn resolve_ids_filters_and_buses(
     buses: &Vec<BusBuilder>,
     messages: &Vec<MessageBuilder>,
@@ -30,11 +28,10 @@ pub fn resolve_ids_filters_and_buses(
     buses.sort_by_key(|k| k.0.borrow().name.clone());
     types.sort_by_key(|t| t.name());
 
-    let log_info = if LOGGING {
-        Some(logging::cache_logging_info(&types, &messages))
-    }else {
-        None
-    };
+
+    #[cfg(feature = "logging_idrp")]
+    let logging_info = logging::cache_logging_info(&types, &messages);
+
     let message_split = MessageSplit::from(&messages);
     let network_info =
         receive_set::generate_receive_sets_from_messages(&nodes, message_split.prio_messages());
@@ -47,9 +44,9 @@ pub fn resolve_ids_filters_and_buses(
     bus_balancing::balance_buses(&messages, &types, &buses);
     let filter_banks = filter_configuration::find_filter_configuration(filter_infos);
 
-    if LOGGING {
-        logging::log_info(log_info.unwrap());
-    }
+    #[cfg(feature = "logging_idrp")]
+    logging::log_info(logging_info);
+
     Ok(filter_banks)
 }
 

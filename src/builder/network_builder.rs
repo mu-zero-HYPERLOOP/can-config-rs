@@ -42,6 +42,7 @@ pub struct NetworkData {
 
 impl NetworkBuilder {
     pub fn new() -> NetworkBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Create Network");
         let network_builder = NetworkBuilder(make_builder_ref(NetworkData {
             messages: make_builder_ref(vec![]),
@@ -196,6 +197,7 @@ impl NetworkBuilder {
     }
     pub fn create_node(&self, name: &str) -> NodeBuilder {
         let network_data = self.0.borrow();
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Require node {name}");
         // check if node already exists.
         let existing_node = network_data
@@ -483,10 +485,12 @@ impl NetworkBuilder {
         if self.0.borrow().buses.borrow().is_empty() {
             // ensure that there is always at least one bus defined!
             self.create_bus("can0", None);
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Implicitly added can0 as the only bus");
         }
         let builder = self.0.borrow();
 
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Building buses");
         let buses: Vec<BusRef> = builder
             .buses
@@ -503,6 +507,7 @@ impl NetworkBuilder {
         let type_builders = Self::topo_sort_type_builders(&builder.types.borrow())?;
 
         // define types.
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Building Types");
         let mut types = vec![];
         for type_builder in type_builders.iter() {
@@ -571,11 +576,13 @@ impl NetworkBuilder {
         // and buses!
         let nodes = builder.nodes.borrow().clone();
         drop(builder);
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Resolving message ids and bus assignments");
         resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &nodes, &types)?;
         let builder = self.0.borrow();
 
 
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Building messages");
         let mut messages = vec![];
         for message_builder in builder.messages.borrow().iter() {
@@ -789,6 +796,7 @@ impl NetworkBuilder {
 
             let mut node_types = vec![];
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Collecting all messages received by node {}", &node_data.name);
             let mut rx_messages = vec![];
             for rx_message_builder in &node_data.rx_messages {
@@ -807,6 +815,7 @@ impl NetworkBuilder {
                 }
                 rx_messages.push(message_ref.clone());
             }
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Collecting all messages transmitted by node {}", &node_data.name);
             let mut tx_messages = vec![];
             for tx_message_builder in &node_data.tx_messages {
@@ -825,6 +834,7 @@ impl NetworkBuilder {
                 tx_messages.push(message_ref.clone());
             }
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Building all commands transmitted by node {}", &node_data.name);
             let mut commands: Vec<ConfigRef<Command>> = vec![];
             for tx_command_builder in &node_builder.0.borrow().commands {
@@ -853,6 +863,7 @@ impl NetworkBuilder {
                 commands.push(command_ref);
             }
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Building Object Entries of node {}", &node_data.name);
             let mut object_entries = vec![];
             let mut id_acc = 0;
@@ -903,6 +914,7 @@ impl NetworkBuilder {
                 )));
             }
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Building streams transmitted by node {}", node_data.name);
             let mut tx_streams = vec![];
             for tx_stream in &node_builder.0.borrow().tx_streams {
@@ -936,8 +948,10 @@ impl NetworkBuilder {
                 message.__set_usage(MessageUsage::Stream(stream_ref.clone()));
                 tx_streams.push(stream_ref);
             }
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Collected all types used by node {}", &node_data.name);
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Sorting all types of {} in topological order", &node_data.name);
             let node_types = Self::topo_sort_types(&node_types);
 
@@ -952,8 +966,10 @@ impl NetworkBuilder {
                         .clone()
                 })
                 .collect();
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Collecting all buses the node {} is connected to", node_data.name);
 
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Successfully build transmitting part of node {}", node_data.name);
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
@@ -976,6 +992,7 @@ impl NetworkBuilder {
         for i in 0..n_nodes {
             let node_builder = &builder.nodes.borrow()[i];
             let node_data = node_builder.0.borrow();
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Linking Received command of node {}", node_data.name);
             for rx_command in &node_data.extern_commands {
                 let rx_command_data = rx_command.0.borrow();
@@ -997,6 +1014,7 @@ impl NetworkBuilder {
                     }
                 }
             }
+            #[cfg(feature = "logging_info")]
             println!("[CANZERO-CONFIG::build] Linking Received streams to node {}", node_data.name);
             for rx_stream in &node_data.rx_streams {
                 let rx_stream_data = rx_stream.0.borrow();
@@ -1068,6 +1086,7 @@ impl NetworkBuilder {
             }
         }
 
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Successfully build all nodes");
         let nodes: Vec<ConfigRef<Node>> = nodes
             .into_iter()
@@ -1075,6 +1094,7 @@ impl NetworkBuilder {
             .collect();
 
         // set node for all object entries!
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Linking Object Entries to nodes");
         for node in &nodes {
             for oe in node.object_entries() {
@@ -1082,6 +1102,7 @@ impl NetworkBuilder {
             }
         }
 
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Finalizing usage of all messages");
         // set usage for all messages!
         for message in &messages {
@@ -1117,6 +1138,7 @@ impl NetworkBuilder {
             .find(|message| message.name() == "heartbeat")
             .expect("heartbeat message was not defined").clone();
 
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Successfully build configuration");
         Ok(make_config_ref(Network::new(
             chrono::Local::now(),

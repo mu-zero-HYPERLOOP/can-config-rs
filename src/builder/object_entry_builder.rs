@@ -18,6 +18,7 @@ pub struct ObjectEntryData {
 
 impl ObjectEntryBuilder {
     pub fn new(name: &str, ty: &str, node_name : &str) -> ObjectEntryBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Create ObjectEntry {node_name}::{name} : {ty}");
         ObjectEntryBuilder(make_builder_ref(ObjectEntryData {
             name: name.to_owned(),

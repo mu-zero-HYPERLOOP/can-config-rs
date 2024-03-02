@@ -33,6 +33,7 @@ pub struct ReceiveStreamData {
 
 impl StreamBuilder {
     pub fn new(name: &str, node_builder: NodeBuilder) -> StreamBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating (tx)-Stream {name} for node {}", node_builder.0.borrow().name);
         let node_data = node_builder.0.borrow();
         let message = node_data.network_builder.create_message(
@@ -108,6 +109,7 @@ impl StreamBuilder {
 
 impl ReceiveStreamBuilder {
     pub fn new(stream_builder: StreamBuilder, rx_node: NodeBuilder) -> ReceiveStreamBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating (rx)-Stream {}::{}", rx_node.0.borrow().name, stream_builder.0.borrow().name);
         let rx_node_name = rx_node.0.borrow().name.clone();
         drop(rx_node_name);

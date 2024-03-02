@@ -23,6 +23,7 @@ pub struct NodeData {
 
 impl NodeBuilder {
     pub fn new(name: &str, network_builder: &NetworkBuilder) -> NodeBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating node {name}");
         let node_builder = NodeBuilder(make_builder_ref(NodeData {
             name: name.to_owned(),
@@ -102,6 +103,7 @@ impl NodeBuilder {
             .push(message_builder.0.borrow().call_message.clone());
     }
     pub fn create_object_entry(&self, name: &str, ty: &str) -> ObjectEntryBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Require ObjectEntry {}::{name}", self.0.borrow().name);
         let existing_oe = self.0.borrow().object_entries.iter().find(|oe| oe.0.borrow().name == name).cloned();
         match existing_oe {
@@ -117,6 +119,7 @@ impl NodeBuilder {
         object_entry_builder
     }
     pub fn create_stream(&self, name: &str) -> StreamBuilder {
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Require Stream {}::{name}", self.0.borrow().name);
         match self.0.borrow().tx_streams.iter().find(|stream| stream.0.borrow().name == name).cloned() {
             Some(stream) => return stream,
@@ -130,6 +133,7 @@ impl NodeBuilder {
 
     pub fn receive_stream(&self, tx_node_name: &str, tx_stream_name: &str) -> ReceiveStreamBuilder {
         let node_data = self.0.borrow();
+        #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::construct] Creating dependencies of receive stream {tx_node_name}::{tx_stream_name} -> {}", node_data.name);
         if tx_node_name == node_data.name {
             panic!("can't receive local stream");
