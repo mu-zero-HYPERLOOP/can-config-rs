@@ -4,8 +4,10 @@ use std::{
     time::Duration,
 };
 
+use regex::Regex;
+
 use crate::{
-    errors::Result,
+    builder::message_resolution::resolve_ids_filters_and_buses,
     config::{
         self,
         bus::BusRef,
@@ -17,12 +19,14 @@ use crate::{
         Command, ConfigRef, Message, MessageEncoding, MessageId, Network, NetworkRef, Node,
         ObjectEntry, SignalRef, SignalType, Type, TypeRef, TypeSignalEncoding,
     },
-    errors::{self}, builder::message_resolution::resolve_ids_filters_and_buses,
+    errors::Result,
+    errors::{self},
 };
 
 use super::{
-    bus::BusBuilder, make_builder_ref, message_builder::MessageIdTemplate, BuilderRef, EnumBuilder,
-    MessageBuilder, MessageFormat, MessagePriority, NodeBuilder, StructBuilder, TypeBuilder, import_dbc::import_dbc,
+    bus::BusBuilder, import_dbc::import_dbc, make_builder_ref, message_builder::MessageIdTemplate,
+    BuilderRef, EnumBuilder, MessageBuilder, MessageFormat, MessagePriority, NodeBuilder,
+    StructBuilder, TypeBuilder,
 };
 
 #[derive(Debug, Clone)]
@@ -152,7 +156,7 @@ impl NetworkBuilder {
         network_builder
     }
 
-    pub fn include_dbc(&self, bus : &str, dbc_path : &str) -> Result<()> {
+    pub fn include_dbc(&self, bus: &str, dbc_path: &str) -> Result<()> {
         import_dbc(self, bus, dbc_path)
     }
 
@@ -498,10 +502,13 @@ impl NetworkBuilder {
             .iter()
             .map(|bus_builder| {
                 let bus_data = bus_builder.0.borrow();
-                make_config_ref(config::bus::Bus::new(&bus_data.name, bus_data.id, bus_data.baudrate))
+                make_config_ref(config::bus::Bus::new(
+                    &bus_data.name,
+                    bus_data.id,
+                    bus_data.baudrate,
+                ))
             })
             .collect();
-
 
         // sort types in topological order!
         let type_builders = Self::topo_sort_type_builders(&builder.types.borrow())?;
@@ -532,10 +539,9 @@ impl NetworkBuilder {
                         }
                     }
 
-
                     let size = if max_entry == 0 {
                         1
-                    }else {
+                    } else {
                         (max_entry as f64).log2().floor() as u8 + 1
                     };
                     make_config_ref(Type::Enum {
@@ -580,7 +586,6 @@ impl NetworkBuilder {
         println!("[CANZERO-CONFIG::build] Resolving message ids and bus assignments");
         resolve_ids_filters_and_buses(&tmp_buses, &tmp_messages, &nodes, &types)?;
         let builder = self.0.borrow();
-
 
         #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Building messages");
@@ -664,7 +669,7 @@ impl NetworkBuilder {
                                 name: enum_name,
                                 description: _,
                                 size,
-                                entries : _,
+                                entries: _,
                                 visibility: _,
                             } => {
                                 let size = *size;
@@ -797,7 +802,10 @@ impl NetworkBuilder {
             let mut node_types = vec![];
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Collecting all messages received by node {}", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Collecting all messages received by node {}",
+                &node_data.name
+            );
             let mut rx_messages = vec![];
             for rx_message_builder in &node_data.rx_messages {
                 let message_ref = messages
@@ -816,7 +824,10 @@ impl NetworkBuilder {
                 rx_messages.push(message_ref.clone());
             }
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Collecting all messages transmitted by node {}", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Collecting all messages transmitted by node {}",
+                &node_data.name
+            );
             let mut tx_messages = vec![];
             for tx_message_builder in &node_data.tx_messages {
                 let message_ref = messages
@@ -835,7 +846,10 @@ impl NetworkBuilder {
             }
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Building all commands transmitted by node {}", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Building all commands transmitted by node {}",
+                &node_data.name
+            );
             let mut commands: Vec<ConfigRef<Command>> = vec![];
             for tx_command_builder in &node_builder.0.borrow().commands {
                 let command_data = tx_command_builder.0.borrow();
@@ -864,7 +878,10 @@ impl NetworkBuilder {
             }
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Building Object Entries of node {}", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Building Object Entries of node {}",
+                &node_data.name
+            );
             let mut object_entries = vec![];
             let mut id_acc = 0;
             for object_entry_builder in &node_builder.0.borrow().object_entries {
@@ -915,7 +932,10 @@ impl NetworkBuilder {
             }
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Building streams transmitted by node {}", node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Building streams transmitted by node {}",
+                node_data.name
+            );
             let mut tx_streams = vec![];
             for tx_stream in &node_builder.0.borrow().tx_streams {
                 let stream_data = tx_stream.0.borrow();
@@ -949,10 +969,16 @@ impl NetworkBuilder {
                 tx_streams.push(stream_ref);
             }
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Collected all types used by node {}", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Collected all types used by node {}",
+                &node_data.name
+            );
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Sorting all types of {} in topological order", &node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Sorting all types of {} in topological order",
+                &node_data.name
+            );
             let node_types = Self::topo_sort_types(&node_types);
 
             let buses = node_data
@@ -967,10 +993,16 @@ impl NetworkBuilder {
                 })
                 .collect();
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Collecting all buses the node {} is connected to", node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Collecting all buses the node {} is connected to",
+                node_data.name
+            );
 
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Successfully build transmitting part of node {}", node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Successfully build transmitting part of node {}",
+                node_data.name
+            );
             nodes.push(RefCell::new(Node::new(
                 node_data.name.clone(),
                 node_data.description.clone(),
@@ -993,7 +1025,10 @@ impl NetworkBuilder {
             let node_builder = &builder.nodes.borrow()[i];
             let node_data = node_builder.0.borrow();
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Linking Received command of node {}", node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Linking Received command of node {}",
+                node_data.name
+            );
             for rx_command in &node_data.extern_commands {
                 let rx_command_data = rx_command.0.borrow();
                 'outer: for j in 0..n_nodes {
@@ -1015,7 +1050,10 @@ impl NetworkBuilder {
                 }
             }
             #[cfg(feature = "logging_info")]
-            println!("[CANZERO-CONFIG::build] Linking Received streams to node {}", node_data.name);
+            println!(
+                "[CANZERO-CONFIG::build] Linking Received streams to node {}",
+                node_data.name
+            );
             for rx_stream in &node_data.rx_streams {
                 let rx_stream_data = rx_stream.0.borrow();
                 let tx_stream_builder = rx_stream_data.stream_builder.clone();
@@ -1121,7 +1159,7 @@ impl NetworkBuilder {
                 let interval = match expected {
                     crate::builder::message_builder::MessageBuilderUsage::External { interval } => {
                         interval
-                    },
+                    }
                     crate::builder::message_builder::MessageBuilderUsage::Heartbeat => {
                         Some(Duration::from_millis(100))
                     }
@@ -1132,15 +1170,16 @@ impl NetworkBuilder {
                 once_cell.set(MessageUsage::External { interval }).unwrap();
             }
         }
-        
+
         let heartbeat_message = messages
             .iter()
             .find(|message| message.name() == "heartbeat")
-            .expect("heartbeat message was not defined").clone();
+            .expect("heartbeat message was not defined")
+            .clone();
 
         #[cfg(feature = "logging_info")]
         println!("[CANZERO-CONFIG::build] Successfully build configuration");
-        Ok(make_config_ref(Network::new(
+        let network_ref = make_config_ref(Network::new(
             chrono::Local::now(),
             nodes,
             messages,
@@ -1151,6 +1190,101 @@ impl NetworkBuilder {
             set_resp_message,
             heartbeat_message,
             buses,
-        )))
+        ));
+
+        // SEMANTIC CHECKS!
+        
+        // check that all names are valid c/c++ variables
+        let valid_c_var = Regex::new(r"^[a-zA-Z_]+[a-zA-Z0-9_]*$").unwrap();
+        let is_c_keyword = Regex::new(r"^(restrict|alignas|alignof|and|and_eq|asm|atomic_cancel|atomic_commit|auto|bitand|bitor|bool|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexpect|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|reflexpr|register|reinterpret_cast|require|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|synchronized|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor|xor_eq)$").unwrap();
+        for node in network_ref.nodes() {
+            let node_name = node.name();
+            if !valid_c_var.is_match(node_name) || is_c_keyword.is_match(node_name) {
+                panic!("{node_name} is not a valid node name.");
+            }
+            for stream in node.tx_streams() {
+                let name = stream.name();
+                if !valid_c_var.is_match(name) || is_c_keyword.is_match(name) {
+                    panic!("{name} is not a valid stream name.");
+                }
+            }
+            for oe in node.object_entries() {
+                let name = oe.name();
+                if !valid_c_var.is_match(name) || is_c_keyword.is_match(name) {
+                    panic!("{name} is not a valid object entry name.");
+                }
+            }
+            for cmd in node.commands() {
+                let name = cmd.name();
+                if !valid_c_var.is_match(name) || is_c_keyword.is_match(name) {
+                    panic!("{name} is not a valid command name");
+                }
+            }
+        }
+
+        for bus in network_ref.buses() {
+            let name = bus.name();
+            if !valid_c_var.is_match(name) || is_c_keyword.is_match(name) {
+                panic!("{name} is not a valid bus name");
+            }
+        }
+
+        for message in network_ref.messages() {
+            let dlc = message.dlc();
+            let msg_name = message.name();
+
+            if !valid_c_var.is_match(msg_name) || is_c_keyword.is_match(msg_name) {
+                panic!("{msg_name} is not a valid name for a message.");
+            }
+            if dlc > 8 {
+                panic!(
+                    "All messages have to have a dlc less than 8. \n{msg_name} has dlc = {dlc}."
+                );
+            }
+
+            if dlc == 0 {
+                println!("WARN: message {msg_name} is empty");
+            }
+        }
+
+        fn check_ty(ty: &Type, valid_c_var: &Regex, c_keyword: &Regex) {
+            match &ty as &Type {
+                Type::Primitive(_) => (),
+                Type::Struct {
+                    name,
+                    description : _,
+                    attribs,
+                    visibility : _,
+                } => {
+                    if !valid_c_var.is_match(name) || c_keyword.is_match(name) {
+                        panic!("{name} is not a valid name for a struct");
+                    }
+                    for (attrib_name, attrib_ty) in attribs {
+                        if !valid_c_var.is_match(attrib_name) || c_keyword.is_match(attrib_name) {
+                            panic!("{attrib_name} is not a valid attribute for a struct (in struct {name})");
+                        }
+                        check_ty(attrib_ty, valid_c_var, c_keyword)
+                    }
+                }
+                Type::Enum {
+                    name,
+                    description : _,
+                    size : _,
+                    entries : _,
+                    visibility : _,
+                } => {
+                    if !valid_c_var.is_match(name) || c_keyword.is_match(name) {
+                        panic!("{name} is not a valid name for a struct");
+                    }
+                }
+                Type::Array { len : _, ty } => check_ty(ty, valid_c_var, c_keyword),
+            }
+        }
+
+        for ty in network_ref.types() {
+            check_ty(ty, &valid_c_var, &is_c_keyword);
+        }
+
+        Ok(network_ref)
     }
 }
