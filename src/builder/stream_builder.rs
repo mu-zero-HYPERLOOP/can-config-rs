@@ -146,13 +146,13 @@ impl ReceiveStreamBuilder {
             .find(|oe| oe.0.borrow().name == to)
             .cloned();
 
-        let (tx_oe, rx_oe) = match (tx_oe, rx_oe) {
+        let (tx_oe, rx_oe) = match (tx_oe.clone(), rx_oe) {
             (None, None) => {
                 // NOTE: no type information avaiable (theretically this should be
                 // allowed because the type information might be added later to.
                 // For now this will not be allowed
                 panic!("Not possible to create a rx_stream without forward defined types. 
-                       Please add a object entry with one of the types used in the mapping before defining the rx_stream mapping.");
+                       Please add a object entry with one of the types used in the mapping before defining the rx_stream mapping. [from = {from:?}, to = {to:?}]");
             }
             (None, Some(rx_oe)) => {
                 // NOTE: create tx_oe
