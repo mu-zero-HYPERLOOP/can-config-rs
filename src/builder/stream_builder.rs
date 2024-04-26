@@ -90,7 +90,8 @@ impl StreamBuilder {
         {
             Some(oe) => oe,
             None => {
-                panic!("Failed to create stream entry. Object entry {name} does not exist");
+                let node_name = &node_data.name;
+                panic!("Failed to create stream entry. Object entry {node_name}:{name} does not exist");
             }
         };
         // .unwrap_or_else(|| node.create_object_entry(name, "u1"));
