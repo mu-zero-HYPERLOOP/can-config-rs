@@ -116,8 +116,8 @@ impl Message {
 impl Display for MessageId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            MessageId::StandardId(id) => write!(f, "0x{:X} ({id})", id),
-            MessageId::ExtendedId(id) => write!(f, "0x{:X}x ({id})", id),
+            MessageId::StandardId(id) => write!(f, "0x{:03X} ", id),
+            MessageId::ExtendedId(id) => write!(f, "{:05X}x", id),
         }
     }
 }
