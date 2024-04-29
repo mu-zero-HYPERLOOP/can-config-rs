@@ -2,7 +2,7 @@ use super::{ConfigRef, SignalType, Visibility};
 
 pub type TypeRef = ConfigRef<Type>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash)]
 pub enum Type {
     Primitive(SignalType),
     Struct {

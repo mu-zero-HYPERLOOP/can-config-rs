@@ -1,9 +1,9 @@
-use std::{fmt::Display, time::Duration, sync::OnceLock};
+use std::{fmt::Display, hash::Hash, sync::OnceLock, time::Duration};
 
 use super::{ConfigRef, MessageEncoding, SignalRef, Visibility, bus::BusRef, stream::StreamRef, CommandRef};
 
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum MessageUsage {
     Stream(StreamRef),
     CommandReq(CommandRef),
@@ -50,6 +50,20 @@ pub struct Message {
     dlc : u8,
     bus : BusRef,
     usage : OnceLock<MessageUsage>,
+}
+
+impl Hash for Message {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.description.hash(state);
+        self.id.hash(state);
+        self.encoding.hash(state);
+        self.signals.hash(state);
+        self.visibility.hash(state);
+        self.dlc.hash(state);
+        self.bus.hash(state);
+        self.usage.get().hash(state);
+    }
 }
 
 

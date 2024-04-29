@@ -1,11 +1,11 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use super::{ConfigRef, NodeRef, MessageRef, TypeRef, Type, SignalType, bus::BusRef};
 
 
 pub type NetworkRef = ConfigRef<Network>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct Network {
     build_time: chrono::DateTime<chrono::Local>,
     nodes: Vec<NodeRef>,

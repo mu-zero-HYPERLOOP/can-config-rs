@@ -4,7 +4,7 @@ use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, Objec
 pub type NodeRef = ConfigRef<Node>;
 
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct Node {
     name: String,
     description: Option<String>,

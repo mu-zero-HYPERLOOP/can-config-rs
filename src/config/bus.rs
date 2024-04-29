@@ -4,7 +4,7 @@ use super::ConfigRef;
 
 pub type BusRef = ConfigRef<Bus>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct Bus {
     id : u32,
     baudrate : u32,

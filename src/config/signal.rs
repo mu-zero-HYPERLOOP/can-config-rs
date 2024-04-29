@@ -1,10 +1,10 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use super::ConfigRef;
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum SignalSign {
     Signed,
     Unsigned,
@@ -24,6 +24,26 @@ pub enum SignalType {
     UnsignedInt { size: u8 },
     SignedInt { size: u8 },
     Decimal { size: u8, offset: f64, scale: f64 },
+}
+
+impl Hash for SignalType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self {
+            SignalType::UnsignedInt { size } => {
+                state.write_usize(0);
+                size.hash(state);
+            },
+            SignalType::SignedInt { size } => {
+                state.write_usize(1);
+                size.hash(state);
+            },
+            SignalType::Decimal { size, offset, scale } => {
+                state.write_usize(2);
+                ((*offset * 1e9) as u128).hash(state);
+                ((*scale * 1e9) as u128).hash(state);
+            }
+        }
+    }
 }
 
 impl SignalType {
@@ -75,7 +95,7 @@ impl SignalType {
 
 pub type SignalRef = ConfigRef<Signal>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Signal {
     pub name: String,
     pub description: Option<String>,
@@ -134,5 +154,5 @@ impl Signal {
 }
 
 pub type ValueTableRef = ConfigRef<ValueTable>;
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct ValueTable(pub Vec<(String, u64)>);

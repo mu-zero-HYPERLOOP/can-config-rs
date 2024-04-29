@@ -5,7 +5,7 @@ use super::{ConfigRef, MessageRef, Visibility, Message};
 
 pub type CommandRef = ConfigRef<Command>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct Command {
     name: String,
     description: Option<String>,

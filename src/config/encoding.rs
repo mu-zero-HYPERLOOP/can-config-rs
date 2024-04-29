@@ -5,7 +5,7 @@ use super::{TypeRef, SignalRef};
 // describes how to map Type to signals.
 // vector of elements with name and type of the encoded Types
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct MessageEncoding {
     attributes : Vec<TypeSignalEncoding>,
 }
@@ -21,7 +21,7 @@ impl MessageEncoding {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum TypeSignalEncoding {
     Composite(CompositeSignalEncoding),
     Primitive(PrimitiveSignalEncoding),
@@ -42,7 +42,7 @@ impl TypeSignalEncoding {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct CompositeSignalEncoding {
     composite_name : String,
     attributes : Vec<TypeSignalEncoding>,
@@ -69,7 +69,7 @@ impl CompositeSignalEncoding {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct PrimitiveSignalEncoding {
     name : String,
     ty : TypeRef,

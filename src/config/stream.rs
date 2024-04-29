@@ -5,7 +5,7 @@ use super::{ConfigRef, ObjectEntryRef, MessageRef, Visibility};
 
 pub type StreamRef = ConfigRef<Stream>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct Stream {
     name: String,
     description: Option<String>,
