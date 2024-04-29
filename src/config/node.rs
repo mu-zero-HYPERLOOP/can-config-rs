@@ -1,10 +1,12 @@
+use std::hash::Hash;
+
 use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, ObjectEntryRef, Message, bus::{Bus, BusRef}};
 
 
 pub type NodeRef = ConfigRef<Node>;
 
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Node {
     name: String,
     description: Option<String>,
@@ -23,6 +25,18 @@ pub struct Node {
 
     object_entries: Vec<ObjectEntryRef>,
     buses : Vec<BusRef>,
+}
+
+impl Hash for Node {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.id.hash(state);
+        self.commands().hash(state);
+        self.extern_commands().hash(state);
+        self.tx_streams().hash(state);
+        self.rx_streams().hash(state);
+        self.object_entries().hash(state);
+    }
 }
 
 impl Node {

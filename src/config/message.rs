@@ -55,7 +55,6 @@ pub struct Message {
 impl Hash for Message {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
-        self.description.hash(state);
         self.id.hash(state);
         self.encoding.hash(state);
         self.signals.hash(state);

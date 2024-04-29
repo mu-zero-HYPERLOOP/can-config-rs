@@ -27,13 +27,11 @@ pub struct ObjectEntry {
 impl Hash for ObjectEntry {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
-        self.description.hash(state);
         self.unit.hash(state);
         self.id.hash(state);
         self.ty.hash(state);
         self.access.hash(state);
         self.visibility.hash(state);
-        self.node.get().hash(state);
     }
 }
 

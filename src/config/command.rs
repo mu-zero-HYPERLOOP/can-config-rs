@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{hash::Hash, time::Duration};
 
 use super::{ConfigRef, MessageRef, Visibility, Message};
 
 
 pub type CommandRef = ConfigRef<Command>;
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Command {
     name: String,
     description: Option<String>,
@@ -13,6 +13,14 @@ pub struct Command {
     rx_message: MessageRef,
     visibility: Visibility,
     expected_interval : Duration,
+}
+
+impl Hash for Command {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.visibility.hash(state);
+        self.expected_interval.hash(state);
+    }
 }
 
 impl Command {

@@ -1,11 +1,11 @@
-use std::{fmt::Display, hash::Hash};
+use std::{fmt::Display, hash::{self, Hash}};
 
 use super::{ConfigRef, NodeRef, MessageRef, TypeRef, Type, SignalType, bus::BusRef};
 
 
 pub type NetworkRef = ConfigRef<Network>;
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Network {
     build_time: chrono::DateTime<chrono::Local>,
     nodes: Vec<NodeRef>,
@@ -17,6 +17,14 @@ pub struct Network {
     set_req_message : MessageRef,
     heartbeat_message : MessageRef,
     buses : Vec<BusRef>,
+}
+
+impl hash::Hash for Network {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.nodes.hash(state);
+        self.messages().hash(state);
+        self.buses().hash(state);
+    }
 }
 
 impl Network {

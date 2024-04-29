@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{hash::Hash, time::Duration};
 
 use super::{ConfigRef, ObjectEntryRef, MessageRef, Visibility};
 
 
 pub type StreamRef = ConfigRef<Stream>;
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct Stream {
     name: String,
     description: Option<String>,
@@ -13,6 +13,15 @@ pub struct Stream {
     message: MessageRef,
     visibility: Visibility,
     interval : (Duration, Duration),
+}
+
+impl Hash for Stream {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.mapping().hash(state);
+        self.visibility.hash(state);
+        self.interval.hash(state);
+    }
 }
 
 impl Stream {
