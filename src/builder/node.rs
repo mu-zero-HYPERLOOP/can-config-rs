@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::config::ObjectEntryAccess;
+
 use super::{stream_builder::{ReceiveStreamBuilder, StreamBuilder}, ObjectEntryBuilder, MessageBuilder, NetworkBuilder, CommandBuilder, BuilderRef, MessagePriority, make_builder_ref, bus::BusBuilder};
 
 
@@ -42,6 +44,10 @@ impl NodeBuilder {
         node_builder.add_tx_message(&network_builder._get_resp_message());
         node_builder.add_rx_message(&network_builder._set_req_message());
         node_builder.add_tx_message(&network_builder._set_resp_message());
+
+        let config_hash = node_builder.create_object_entry("config_hash", "u64");
+        config_hash.add_description("Hash of the local network configuration");
+        config_hash.set_access(ObjectEntryAccess::Const);
 
         node_builder
     }
