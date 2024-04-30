@@ -153,6 +153,16 @@ impl NetworkBuilder {
         command_resp.add_entry("Success", Some(0)).unwrap();
         command_resp.add_entry("Error", Some(1)).unwrap();
 
+        let date_struct = network_builder.define_struct("date_time");
+        date_struct.add_attribute("year", "u16").unwrap();
+        date_struct.add_attribute("month", "u8").unwrap();
+        date_struct.add_attribute("day", "u8").unwrap();
+        date_struct.add_attribute("hour", "u8").unwrap();
+        date_struct.add_attribute("min", "u8").unwrap();
+        date_struct.add_attribute("sec", "u8").unwrap();
+
+
+
         network_builder
     }
 

@@ -49,6 +49,10 @@ impl NodeBuilder {
         config_hash.add_description("Hash of the local network configuration");
         config_hash.set_access(ObjectEntryAccess::Const);
 
+        let build_time = node_builder.create_object_entry("build_time", "date_time");
+        build_time.add_description("Time the node was last build from source");
+        build_time.set_access(ObjectEntryAccess::Const);
+
         node_builder
     }
     pub fn assign_bus(&self, bus_name : &str) -> BusBuilder{
