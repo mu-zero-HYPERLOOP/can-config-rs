@@ -45,16 +45,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
-name = "can-config-rs"
-version = "0.1.0"
-dependencies = [
- "bit_reverse",
- "can-dbc",
- "chrono",
- "regex",
-]
-
-[[package]]
 name = "can-dbc"
 version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -62,6 +52,16 @@ checksum = "9c2d32f0a7f3754502f84cb68e493a6765ce0978348a59efcb1bccf2ee19c255"
 dependencies = [
  "derive-getters",
  "nom",
+]
+
+[[package]]
+name = "canzero-config"
+version = "0.1.0"
+dependencies = [
+ "bit_reverse",
+ "can-dbc",
+ "chrono",
+ "regex",
 ]
 
 [[package]]
