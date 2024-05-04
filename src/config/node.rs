@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, ObjectEntryRef, Message, bus::{Bus, BusRef}};
+use super::{ConfigRef, TypeRef, CommandRef, stream::StreamRef, MessageRef, ObjectEntryRef, bus::BusRef};
 
 
 pub type NodeRef = ConfigRef<Node>;
@@ -29,13 +29,28 @@ pub struct Node {
 
 impl Hash for Node {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.id.hash(state);
-        self.commands().hash(state);
-        self.extern_commands().hash(state);
-        self.tx_streams().hash(state);
-        self.rx_streams().hash(state);
-        self.object_entries().hash(state);
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
+        state.write_u8(self.id);
+        for c in &self.commands {
+            c.hash(state);
+        }
+        for (n, c) in &self.extern_commands {
+            c.hash(state);
+            for b in n.bytes() {
+                state.write_u8(b);
+            }
+        }
+        for s in &self.tx_streams {
+            s.hash(state);
+        }
+        for s in &self.rx_streams {
+            s.hash(state);
+        }
+        for oe in &self.object_entries {
+            oe.hash(state);
+        }
     }
 }
 

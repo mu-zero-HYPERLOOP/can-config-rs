@@ -3,7 +3,7 @@ use std::{fmt::Display, hash::Hash, sync::OnceLock, time::Duration};
 use super::{ConfigRef, MessageEncoding, SignalRef, Visibility, bus::BusRef, stream::StreamRef, CommandRef};
 
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub enum MessageUsage {
     Stream(StreamRef),
     CommandReq(CommandRef),
@@ -16,10 +16,26 @@ pub enum MessageUsage {
     External{interval : Duration},
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum MessageId {
     StandardId(u32),
     ExtendedId(u32),
+}
+
+impl Hash for MessageId {
+
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self {
+            MessageId::StandardId(id) => {
+                state.write_u8(0);
+                state.write_u32(*id);
+            }
+            MessageId::ExtendedId(id) => {
+                state.write_u8(1);
+                state.write_u32(*id);
+            }
+        }
+    }
 }
 
 impl MessageId {
@@ -54,14 +70,25 @@ pub struct Message {
 
 impl Hash for Message {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
         self.id.hash(state);
-        self.encoding.hash(state);
-        self.signals.hash(state);
+        match &self.encoding {
+            Some(encoding) => {
+                state.write_u8(0);
+                encoding.hash(state);
+            },
+            None => {
+                state.write_u8(1);
+                for s in &self.signals {
+                    s.hash(state);
+                }
+            }
+        }
         self.visibility.hash(state);
-        self.dlc.hash(state);
-        self.bus.hash(state);
-        self.usage.get().hash(state);
+        state.write_u8(self.dlc);
+        state.write_u32(self.bus.id());
     }
 }
 

@@ -17,9 +17,12 @@ pub struct Command {
 
 impl Hash for Command {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
         self.visibility.hash(state);
-        self.expected_interval.hash(state);
+        let us =  self.expected_interval().as_micros();
+        state.write_u128(us);
     }
 }
 

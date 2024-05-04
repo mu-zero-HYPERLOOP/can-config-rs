@@ -17,10 +17,25 @@ pub struct Stream {
 
 impl Hash for Stream {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.mapping().hash(state);
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
+        for m in &self.mappings {
+            match m {
+                Some(oe) => {
+                    state.write_u8(1);
+                    oe.hash(state);
+                }
+                None => {
+                    state.write_u8(0);
+                }
+            }
+        }
         self.visibility.hash(state);
-        self.interval.hash(state);
+        let us1 = self.interval.0.as_micros();
+        let us2 = self.interval.1.as_micros();
+        state.write_u128(us1);
+        state.write_u128(us2);
     }
 }
 

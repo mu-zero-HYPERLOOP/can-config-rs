@@ -1,8 +1,10 @@
+use std::hash::Hash;
+
 use super::{ConfigRef, SignalType, Visibility};
 
 pub type TypeRef = ConfigRef<Type>;
 
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq)]
 pub enum Type {
     Primitive(SignalType),
     Struct {
@@ -22,6 +24,67 @@ pub enum Type {
         len: usize,
         ty: TypeRef,
     },
+}
+
+impl Hash for Type  {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self {
+            Type::Primitive(signal) => {
+                state.write_u8(0);
+                signal.hash(state);
+            }
+            Type::Struct { name, description, attribs, visibility } => {
+                state.write_u8(1);
+                for b in name.bytes() {
+                    state.write_u8(b);
+                }
+                match description {
+                    Some(desc) => {
+                        state.write_u8(0);
+                        for b in desc.bytes() {
+                            state.write_u8(b);
+                        }
+                    }
+                    None => state.write_u8(1),
+                }
+                for (x,y) in attribs {
+                    for b in x.bytes() {
+                        state.write_u8(b);
+                    }
+                    y.hash(state);
+                }
+                visibility.hash(state);
+            },
+            Type::Enum { name, description, size, entries, visibility } => {
+                state.write_u8(2);
+                for b in name.bytes() {
+                    state.write_u8(b);
+                }
+                match description {
+                    Some(desc) => {
+                        state.write_u8(0);
+                        for b in desc.bytes() {
+                            state.write_u8(b);
+                        }
+                    }
+                    None => state.write_u8(1),
+                }
+                state.write_u128(*size as u128);
+                for (x,y) in entries {
+                    for b in x.bytes() {
+                        state.write_u8(b);
+                    }
+                    state.write_u64(*y);
+                }
+                visibility.hash(state);
+            },
+            Type::Array { len, ty } => {
+                state.write_u8(3);
+                state.write_u128(*len as u128);
+                ty.hash(state);
+            }
+        }
+    }
 }
 
 impl Type {

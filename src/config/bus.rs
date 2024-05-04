@@ -1,10 +1,13 @@
+use std::hash::Hash;
+
 use super::ConfigRef;
 
 
 
 pub type BusRef = ConfigRef<Bus>;
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
+
 pub struct Bus {
     id : u32,
     baudrate : u32,
@@ -30,3 +33,13 @@ impl Bus {
     }
 }
 
+
+impl Hash for Bus {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.id);
+        state.write_u32(self.baudrate);
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
+    }
+}

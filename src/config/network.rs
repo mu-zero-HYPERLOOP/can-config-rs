@@ -30,9 +30,15 @@ impl hash::Hash for Network {
 impl Network {
     pub fn portable_hash(&self) -> u64 {
         let mut hasher = seahash::SeaHasher::new();
-        self.nodes.hash(&mut hasher);
-        self.messages.hash(&mut hasher);
-        self.buses().hash(&mut hasher);
+        for n in &self.nodes {
+            n.hash(&mut hasher);
+        }
+        for m in &self.messages {
+            m.hash(&mut hasher);
+        }
+        for b in &self.buses {
+            b.hash(&mut hasher);
+        }
         hasher.finish()
     }
 }

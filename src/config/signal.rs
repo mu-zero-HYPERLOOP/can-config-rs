@@ -4,10 +4,19 @@ use super::ConfigRef;
 
 
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub enum SignalSign {
     Signed,
     Unsigned,
+}
+
+impl Hash for SignalSign {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self {
+            SignalSign::Signed => state.write_u8(0),
+            SignalSign::Unsigned => state.write_u8(1),
+        }
+    }
 }
 
 impl Display for SignalSign {
@@ -30,17 +39,18 @@ impl Hash for SignalType {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match &self {
             SignalType::UnsignedInt { size } => {
-                state.write_usize(0);
-                size.hash(state);
+                state.write_u8(0);
+                state.write_u128(*size as u128);
             },
             SignalType::SignedInt { size } => {
-                state.write_usize(1);
-                size.hash(state);
+                state.write_u8(1);
+                state.write_u128(*size as u128);
             },
             SignalType::Decimal { size, offset, scale } => {
-                state.write_usize(2);
-                ((*offset * 1e9) as u128).hash(state);
-                ((*scale * 1e9) as u128).hash(state);
+                state.write_u8(2);
+                state.write_u128(*size as u128);
+                ((*offset * 1e4) as u128).hash(state);
+                ((*scale * 1e4) as u128).hash(state);
             }
         }
     }
@@ -95,7 +105,7 @@ impl SignalType {
 
 pub type SignalRef = ConfigRef<Signal>;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct Signal {
     pub name: String,
     pub description: Option<String>,
@@ -103,6 +113,32 @@ pub struct Signal {
     pub value_table: Option<ValueTableRef>,
     // refers to the byte offset!
     pub offset: usize,
+}
+
+impl Hash for Signal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for b in self.name.bytes() {
+            state.write_u8(b);
+        }
+        match &self.description{
+            Some(desc) => {
+                state.write_u8(0);
+                for b in desc.bytes() {
+                    state.write_u8(b);
+                }
+            }
+            None => state.write_u8(1),
+        }
+        self.ty.hash(state);
+        match &self.value_table {
+            Some(vt) => {
+                state.write_u8(0);
+                vt.hash(state);
+            }
+            None => state.write_u8(1),
+        }
+        state.write_u128(self.offset as u128);
+    }
 }
 
 impl Signal {
@@ -154,5 +190,16 @@ impl Signal {
 }
 
 pub type ValueTableRef = ConfigRef<ValueTable>;
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct ValueTable(pub Vec<(String, u64)>);
+
+impl Hash for ValueTable {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for (n,v) in &self.0 {
+            for b in n.bytes() {
+                state.write_u8(b);
+            }
+            state.write_u64(*v);
+        }
+    }
+}

@@ -5,11 +5,21 @@ use super::{ConfigRef, TypeRef, Visibility, NodeRef};
 
 pub type ObjectEntryRef = ConfigRef<ObjectEntry>;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub enum ObjectEntryAccess {
     Const,  // no write
     Local,  // local write public read
     Global, // public write
+}
+
+impl Hash for ObjectEntryAccess {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self {
+            ObjectEntryAccess::Const => state.write_u8(0),
+            ObjectEntryAccess::Local => state.write_u8(1),
+            ObjectEntryAccess::Global => state.write_u8(2),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -26,9 +36,19 @@ pub struct ObjectEntry {
 
 impl Hash for ObjectEntry {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.unit.hash(state);
-        self.id.hash(state);
+        for b in self.name.bytes()  {
+            state.write_u8(b);
+        }
+        match &self.unit {
+            Some(unit) => {
+                state.write_u8(1);
+                for b in unit.bytes() {
+                    state.write_u8(b);
+                }
+            }
+            None => state.write_u8(0),
+        }
+        state.write_u32(self.id);
         self.ty.hash(state);
         self.access.hash(state);
         self.visibility.hash(state);
