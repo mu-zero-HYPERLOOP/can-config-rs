@@ -1,6 +1,4 @@
-use std::{fmt::Display, hash::{self, Hash}};
-
-use highway::{HighwayHash, PortableHash};
+use std::{fmt::Display, hash::{self, Hash, Hasher}};
 
 use super::{ConfigRef, NodeRef, MessageRef, TypeRef, Type, SignalType, bus::BusRef};
 
@@ -31,11 +29,11 @@ impl hash::Hash for Network {
 
 impl Network {
     pub fn portable_hash(&self) -> u64 {
-        let mut hasher = PortableHash::default();
+        let mut hasher = seahash::SeaHasher::new();
         self.nodes.hash(&mut hasher);
         self.messages.hash(&mut hasher);
         self.buses().hash(&mut hasher);
-        hasher.finalize64()
+        hasher.finish()
     }
 }
 

@@ -10,7 +10,7 @@ chrono = "0.4.31"
 regex = "1.10.2"
 can-dbc = "5.0"
 bit_reverse = "0.1.8"
-highway = "1.1.0"
+seahash = "4.1.0"
 
 [features]
 logging-info = []
